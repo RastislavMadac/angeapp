@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from rest_framework import viewsets
-from .models import User
-from .serializers import UserSerializer
+from .models import User,ProductType, Category, Unit, Product
+from .serializers import UserSerializer,ProductTypeSerializer, CategorySerializer, UnitSerializer, ProductSerializer
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied
@@ -31,8 +31,7 @@ class CustomAuthToken(ObtainAuthToken):
             'user_id': user.id,
             'username': user.username
         })
-    
-
+ 
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
@@ -59,3 +58,34 @@ class UserViewSet(viewsets.ModelViewSet):
             'role': user.role,
             'token': user.token  # token automaticky priradený v serializeri/signale
         }, status=status.HTTP_201_CREATED)
+    
+
+class ProductTypeViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = ProductType.objects.all()
+    serializer_class = ProductTypeSerializer
+    permission_classes = [IsAuthenticated]
+
+# -----------------------
+# Category
+# -----------------------
+class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
+    permission_classes = [IsAuthenticated]
+
+# -----------------------
+# Unit
+# -----------------------
+class UnitViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Unit.objects.all()
+    serializer_class = UnitSerializer
+    permission_classes = [IsAuthenticated]
+
+# -----------------------
+# Product
+# -----------------------
+class ProductViewSet(viewsets.ModelViewSet):
+    queryset = Product.objects.all()
+    serializer_class = ProductSerializer
+    permission_classes = [IsAuthenticated]
+

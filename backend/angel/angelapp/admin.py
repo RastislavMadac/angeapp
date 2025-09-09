@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import User
+from .models import User, Product, ProductType, Category, Unit
 from django.utils.translation import gettext_lazy as _
 
 @admin.register(User)
@@ -27,3 +27,14 @@ class EmployeesAdmin(UserAdmin):
     list_display = ("id",'username', 'email', 'first_name', 'last_name', 'role', 'is_staff', 'is_active')
     search_fields = ('username', 'email', 'first_name', 'last_name')
     ordering = ('username',)
+
+
+@admin.register(Product)
+class ProductAdmin(admin.ModelAdmin):
+    list_display = ("product_name", "product_type", "category", "total_quantity", "free_quantity")
+    list_filter = ("product_type", "category", "unit")
+    search_fields = ("product_name", "ean_code", "qr_code", "product_id")
+
+admin.site.register(ProductType)
+admin.site.register(Category)
+admin.site.register(Unit)
