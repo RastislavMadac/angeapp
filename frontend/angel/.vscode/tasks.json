@@ -1,0 +1,74 @@
+<<<<<<< HEAD
+<<<<<<< HEAD
+// For more information, visit: https://go.microsoft.com/fwlink/?LinkId=733558
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "npm: start",
+=======
+=======
+// For more information, visit: https://go.microsoft.com/fwlink/?LinkId=733558
+>>>>>>> 015e17c (user and css)
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+<<<<<<< HEAD
+>>>>>>> 8b5a733 (initial commit)
+=======
+      "label": "npm: start",
+>>>>>>> 015e17c (user and css)
+      "type": "npm",
+      "script": "start",
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "typescript",
+        "pattern": "$tsc",
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": {
+            "regexp": "(.*?)"
+          },
+          "endsPattern": {
+            "regexp": "bundle generation complete"
+          }
+        }
+      }
+    },
+    {
+<<<<<<< HEAD
+<<<<<<< HEAD
+      "label": "npm: test",
+=======
+>>>>>>> 8b5a733 (initial commit)
+=======
+      "label": "npm: test",
+>>>>>>> 015e17c (user and css)
+      "type": "npm",
+      "script": "test",
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "typescript",
+        "pattern": "$tsc",
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": {
+            "regexp": "(.*?)"
+          },
+          "endsPattern": {
+            "regexp": "bundle generation complete"
+          }
+        }
+      }
+    }
+  ]
+<<<<<<< HEAD
+<<<<<<< HEAD
+}
+=======
+}
+>>>>>>> 8b5a733 (initial commit)
+=======
+}
+>>>>>>> 015e17c (user and css)

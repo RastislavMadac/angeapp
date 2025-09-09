@@ -1,0 +1,18 @@
+.master {
+    flex: 1;
+    /* zabere časť šírky */
+    border: 1px solid #ccc;
+    padding: 10px;
+    background-color: #f9f9f9;
+    overflow-y: auto;
+}
+
+.detail {
+    flex: 2;
+    /* zabere väčšiu časť šírky */
+    border: 1px solid #ccc;
+    padding: 10px;
+    background-color: #D1E1FA;
+    border-top: 2px solid rgb(240, 238, 238);
+    overflow-y: auto;
+}

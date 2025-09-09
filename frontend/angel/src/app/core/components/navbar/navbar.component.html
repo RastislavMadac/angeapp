@@ -1,0 +1,42 @@
+  <mat-toolbar color="primary">
+    <!-- Ľavá časť: logo + názov -->
+    <div class="left-panel">
+      <img [src]="logoUrl" alt="Logo" class="logo">
+      <span class="brand-name">AngleApp</span>
+    </div>
+  
+    <!-- Spacer posunie pravý panel doprava -->
+    <span class="spacer"></span>
+  
+    <!-- Pravá časť: používateľ + logout -->
+    <div class="right-panel">
+      <span class="username"*ngIf="user">Prihlásený: {{ user.first_name }} {{ user.last_name }} </span>
+      <button mat-raised-button color="warn" (click)="logout()">Odhlásiť sa</button>
+    </div>
+  </mat-toolbar>
+
+  <div class="menu">
+    <button mat-button
+    [routerLink]="['/dashboard']"
+    routerLinkActive="active"
+    aria-label="Dashboard">
+<mat-icon>home</mat-icon>
+
+</button>
+  
+    <button mat-raised-button
+            *ngIf="isAdmin"
+            [routerLink]="['/users']"
+            routerLinkActive="active">
+      Používatelia
+    </button>
+  
+    <button mat-raised-button
+            [routerLink]="['/settings']"
+            routerLinkActive="active">
+      Settings
+    </button>
+  </div>
+  
+  
+  

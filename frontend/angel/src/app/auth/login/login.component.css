@@ -1,0 +1,21 @@
+.toast {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    background: #4caf50;
+    color: white;
+    padding: .5rem 1rem;
+    border-radius: .5rem;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.confirm-dialog {
+    position: fixed;
+    top: 30%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: white;
+    border: 1px solid #ccc;
+    padding: 1rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}

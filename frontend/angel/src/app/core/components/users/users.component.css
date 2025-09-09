@@ -1,0 +1,70 @@
+.buttons {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    /* medzera medzi tlačidlami */
+    padding: 0px 33px;
+    background-color: #B2CBF4;
+    border-top: 1px solid white;
+}
+
+.white-icon {
+    color: rgb(240, 225, 225);
+}
+
+.red-icon {
+    color: rgb(240, 8, 8);
+}
+
+form {
+    display: flex;
+
+    gap: 73px;
+    /* medzera medzi jednotlivými poľami */
+
+    padding: 20px;
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+label {
+    display: flex;
+    flex-direction: column;
+    font-weight: 500;
+    font-size: 14px;
+}
+
+input,
+select {
+    padding: 6px 10px;
+    font-size: 14px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    margin-top: 4px;
+}
+
+input[type="checkbox"] {
+    width: auto;
+    margin-top: 8px;
+}
+
+button[type="submit"] {
+    padding: 8px 16px;
+    font-size: 14px;
+    border: none;
+    border-radius: 4px;
+    background-color: #1976d2;
+    color: white;
+    cursor: pointer;
+    transition: background-color 0.2s ease-in-out;
+}
+
+button[type="submit"]:disabled {
+    background-color: #aaa;
+    cursor: not-allowed;
+}
+
+button[type="submit"]:hover:not(:disabled) {
+    background-color: #115293;
+}

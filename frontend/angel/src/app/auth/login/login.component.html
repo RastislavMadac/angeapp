@@ -1,0 +1,17 @@
+<div class="login-container">
+    <h2>Prihlásenie</h2>
+  
+    <form (ngSubmit)="onSubmit()">
+      <label for="username">Používateľské meno</label>
+      <input type="text" id="username" [(ngModel)]="username" name="username" required>
+  
+      <label for="password">Heslo</label>
+      <input type="password" id="password" [(ngModel)]="password" name="password" required>
+  
+      <button type="submit">Prihlásiť sa</button>
+  
+      <div *ngIf="errorMessage" class="error">
+        {{ errorMessage }}
+      </div>
+    </form>
+  </div>

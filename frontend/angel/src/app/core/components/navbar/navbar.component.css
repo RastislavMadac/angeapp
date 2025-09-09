@@ -1,0 +1,62 @@
+mat-toolbar {
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    background-color: #0078D7;
+    color: aliceblue;
+}
+
+.username {
+    font-size: 16px;
+}
+
+.left-panel {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    /* medzera medzi logom a názvom */
+}
+
+.logo {
+    height: 40px;
+    /* veľkosť loga */
+}
+
+.brand-name {
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+.spacer {
+    flex: 1 1 auto;
+    /* tlačí pravý panel doprava */
+}
+
+.right-panel {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    /* medzera medzi menom a tlačidlom */
+}
+
+.menu {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    /* medzera medzi tlačidlami */
+    padding: 10px;
+    background-color: #B2CBF4;
+}
+
+.menu button {
+    font-size: 14px;
+    height: 32px;
+    min-width: 103px;
+    padding: 0 9px;
+}
+
+.menu button.active {
+    background-color: #1976d2;
+    /* napr. tmavšie modré */
+    color: white;
+}

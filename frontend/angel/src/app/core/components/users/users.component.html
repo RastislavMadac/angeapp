@@ -1,0 +1,77 @@
+
+
+
+<div class="buttons">
+ 
+<button 
+mat-icon-button
+aria-label="Vytvorit"
+matTooltipClass="custom-tooltip"
+class="white-icon"
+matTooltip="Vytvoriť"
+matTooltipPosition="above"
+matTooltipShowDelay="300"
+
+            (click)="createNewUser()"
+            routerLinkActive="active">
+            <mat-icon>description</mat-icon>
+    </button>
+
+<button mat-icon-button
+matTooltip="Vymazať"
+matTooltipPosition="above"
+matTooltipShowDelay="300"
+ aria-label="Vymazať"
+            (click)="deleteUser(selectedUser)"
+            class="red-icon"
+            >
+            <mat-icon>delete</mat-icon>
+    </button>
+
+  </div>
+<ng-template #detailTpl>
+  <form *ngIf="userForm" [formGroup]="userForm" (ngSubmit)="saveUser()">
+    <label>Username: <input formControlName="username"></label><br>
+    <label>E-mail: <input formControlName="email"></label><br>
+    <label>First Name: <input formControlName="first_name"></label><br>
+    <label>Last Name: <input formControlName="last_name"></label><br>
+    <label *ngIf="!selectedUser">Password: <input type="password" formControlName="password"></label><br>
+    <label>Role:
+      <select formControlName="role">
+        <option value="admin">Admin</option>
+        <option value="manager">Manager</option>
+        <option value="worker">Worker</option>
+      </select>
+    </label><br>
+    <label>Aktívny: <input type="checkbox" formControlName="is_active"></label><br>
+    <button type="submit" [disabled]="userForm.invalid">
+      {{ selectedUser ? 'Uložiť' : 'Vytvoriť' }}
+    </button>
+  </form>
+</ng-template>
+
+
+<app-master-layout
+  
+  [masterTemplateInput]="masterTpl"
+  [detailTemplateInput]="detailTpl"
+  [items]="users"
+  [(selectedItem)]="selectedUser"
+  (select)="selectUser($event)">
+</app-master-layout>
+
+<ng-template #masterTpl>
+  <app-generic-table
+  [columns]="columns"
+  [data]="users"
+  [selectedItem]="selectedUser"
+  (rowClick)="selectUser($event)">
+</app-generic-table>
+
+</ng-template>
+
+
+
+
+
+

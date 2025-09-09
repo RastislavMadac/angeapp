@@ -1,0 +1,14 @@
+<!-- Toast notifikácie -->
+<div *ngIf="notification" 
+     [ngClass]="notification.type === 'warn' ? 'toast-warn' : 'toast-info'">
+  {{ notification.message }}
+  <button (click)="notification = null">✖</button>
+</div>
+
+<!-- Confirm dialog -->
+<div *ngIf="confirmMessage" class="notification-confirm">
+  <p>{{ confirmMessage }}</p>
+  <button (click)="respond(true)">Áno</button>
+  <button (click)="respond(false)">Nie</button>
+  <button (click)="closeConfirm()">X</button>
+</div>

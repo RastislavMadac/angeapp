@@ -1,0 +1,6 @@
+<p>dashboard works!</p>
+<p>Vytaj</p>
+
+<span *ngIf="user">Vytaj: {{ user.first_name }}</span>
+<span *ngIf="user">Ak niesi {{ user.first_name }}!! Odhlás sa  prihlás sa pos svojim menom </span>
+<button (click)="logout()">Odhlás sa</button>
