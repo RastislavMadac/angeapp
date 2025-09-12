@@ -13,12 +13,12 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatTooltipModule } from '@angular/material/tooltip';
-
+import { NavbarComponent } from '../navbar/navbar.component';
 
 @Component({
   selector: 'app-users',
   standalone: true,
-  imports: [CommonModule, GenericTableComponent, MasterLayoutComponent, ReactiveFormsModule, MatButtonModule, MatIconModule, MatTooltipModule, MatToolbarModule],
+  imports: [CommonModule, GenericTableComponent, MasterLayoutComponent, ReactiveFormsModule, MatButtonModule, MatIconModule, MatTooltipModule, MatToolbarModule, NavbarComponent],
   templateUrl: './users.component.html',
   styleUrls: ['./users.component.css']
 })
@@ -26,6 +26,7 @@ export class UsersComponent implements OnInit {
   isLoading = true;
   errorMessage = '';
   users: User[] = [];
+
 
 
   selectedUser: User | null = null;   // klasická property
@@ -46,6 +47,9 @@ export class UsersComponent implements OnInit {
   ngOnInit(): void {
     this.loadUsers();
   }
+
+
+
 
   private loadUsers() {
     if (!this.userService.isLoggedIn()) {
@@ -126,6 +130,11 @@ export class UsersComponent implements OnInit {
       // príklad: posielať len polia, ktoré sa menia
       if (this.userForm.value.email) payload.email = this.userForm.value.email;
       if (this.userForm.value.is_active !== undefined) payload.is_active = this.userForm.value.is_active;
+      if (this.userForm.value.username !== undefined) payload.username = this.userForm.value.username;
+      // pridaj ďalšie polia, ktoré sa môžu meniť
+      if (this.userForm.value.first_name !== undefined) payload.first_name = this.userForm.value.first_name;
+      // pridaj ďalšie polia, ktoré sa môžu meniť
+      if (this.userForm.value.last_name !== undefined) payload.username = this.userForm.value.username;
       // pridaj ďalšie polia, ktoré sa môžu meniť
 
       this.userService.updateUser(this.selectedUser.id, payload).subscribe({

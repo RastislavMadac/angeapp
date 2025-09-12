@@ -1,7 +1,7 @@
+/* --- Tabuľka --- */
 .app-table {
     width: 100%;
     border-collapse: collapse;
-    /* odstráni medzery medzi bunkami */
     font-family: Arial, sans-serif;
     background-color: #fff;
 }
@@ -46,12 +46,68 @@
 /* Zvýraznenie všetkých riadkov */
 tr.highlight-row {
     background-color: #fafff0;
-    /* svetlomodrá farba pre každý riadok */
 }
 
 /* Zvýraznenie vybraného riadku */
 tr.selected {
     background-color: #cce5ff !important;
-    /* tmavšie modré */
     font-weight: bold;
+}
+
+/* --- Filter input a tagy --- */
+.filter-container {
+    margin-bottom: 15px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+}
+
+.filter-input {
+    padding: 6px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+    flex: 1 1 200px;
+}
+
+.active-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.filter-chip {
+    background-color: #e0f7fa;
+    /* svetlomodrý tag */
+    color: #00796b;
+    padding: 4px 10px;
+    border-radius: 15px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 13px;
+}
+
+.remove-filter-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-weight: bold;
+    color: #00796b;
+}
+
+.clear-filters-btn {
+    background-color: #1976d2;
+    /* tmavomodré tlačidlo */
+    color: white;
+    border: none;
+    padding: 4px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.clear-filters-btn:hover {
+    background-color: #1565c0;
 }

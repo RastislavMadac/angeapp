@@ -1,18 +1,18 @@
 import { inject } from '@angular/core';
 import { CanActivateFn, Router } from '@angular/router';
-import { AuthService } from '../auth.service';
+import { UserService } from '../servicies/user.service';
 
 export const roleGuard: CanActivateFn = (route, state) => {
-    const authService = inject(AuthService);
+    const userService = inject(UserService);
     const router = inject(Router);
 
     // ak nie je prihlásený → presmeruj na login
-    if (!authService.isLoggedIn()) {
+    if (!userService.isLoggedIn()) {
         return router.parseUrl('/login');
     }
 
     // ak nie je admin → presmeruj napr. na dashboard
-    if (!authService.isAdmin()) {
+    if (!userService.isAdmin()) {
         return router.parseUrl('/dashboard');
     }
 

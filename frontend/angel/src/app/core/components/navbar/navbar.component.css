@@ -48,6 +48,26 @@ mat-toolbar {
     background-color: #B2CBF4;
 }
 
+button.clear-filters-btn.mat-mdc-raised-button {
+    background: #0078D7;
+    font-size: 14px;
+    height: 32px;
+    min-width: 103px;
+    padding: 0 9px;
+    color: white;
+    transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+button.clear-filters-btn.mat-mdc-raised-button:hover {
+    transform: scale(1.05);
+    /* zväčší tlačidlo o 5 % */
+}
+
+button.remove-filter-btn.mat-mdc-raised-button:hover {
+    transform: scale(1.05);
+    /* zväčší tlačidlo o 5 % */
+}
+
 .menu button {
     font-size: 14px;
     height: 32px;
@@ -55,8 +75,53 @@ mat-toolbar {
     padding: 0 9px;
 }
 
+.remove-filter-btn {
+    margin: 5px;
+}
+
 .menu button.active {
     background-color: #1976d2;
     /* napr. tmavšie modré */
     color: white;
+}
+
+.buttons-wrapper {
+
+    display: flex;
+    align-items: center;
+    position: relative;
+    /* kvôli vycentrovaniu inputu */
+    padding: 0 20px;
+    background-color: #B2CBF4;
+    height: 50px;
+    border-top: 1px solid white;
+}
+
+.left-buttons,
+.right-buttons {
+    display: flex;
+    /* tlačidlá vedľa seba */
+    gap: 0;
+    /* minimálna medzera medzi ikonami */
+}
+
+.navbar-search {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 300px;
+    /* alebo max-width */
+    padding: 5px 10px;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+}
+
+
+
+.white-icon {
+    color: white;
+}
+
+.red-icon {
+    color: red;
 }

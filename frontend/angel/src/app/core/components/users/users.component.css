@@ -17,10 +17,11 @@
 }
 
 form {
-    display: flex;
-
-    gap: 73px;
-    /* medzera medzi jednotlivými poľami */
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    gap: 10px;
+    justify-content: center;
+    /* teraz bude fungovať */
 
     padding: 20px;
     background-color: #f9f9f9;
@@ -33,6 +34,7 @@ label {
     flex-direction: column;
     font-weight: 500;
     font-size: 14px;
+    justify-items: center;
 }
 
 input,

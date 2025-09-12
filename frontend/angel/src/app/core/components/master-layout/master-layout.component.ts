@@ -35,7 +35,8 @@ export class MasterLayoutComponent<T = any> implements OnChanges {
 
   setSelectedItem(item: T) {
     this.selectedItem = item;
-    this.select.emit(item);             // pôvodný výstup
-    this.selectedItemChange.emit(item); // nový výstup pre two-way binding
+    this.select.emit(item);
+    this.selectedItemChange.emit(item);
   }
 }
+

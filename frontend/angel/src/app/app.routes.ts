@@ -23,6 +23,14 @@ export const routes: Routes = [
                         .then(m => m.UsersComponent),
             },
             { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
+            {
+                path: 'products',
+                // canActivate: [roleGuard],
+                loadComponent: () =>
+                    import('./core/components/product/product.component')
+                        .then(m => m.ProductComponent),
+            },
+            { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
         ],
     },
     {

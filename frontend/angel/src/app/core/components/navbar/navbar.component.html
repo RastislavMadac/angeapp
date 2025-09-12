@@ -30,6 +30,12 @@
             routerLinkActive="active">
       Používatelia
     </button>
+    <button mat-raised-button
+            
+            [routerLink]="['/products']"
+            routerLinkActive="active">
+      Produkty
+    </button>
   
     <button mat-raised-button
             [routerLink]="['/settings']"
@@ -37,6 +43,50 @@
       Settings
     </button>
   </div>
+
+
+  <div class="buttons-wrapper">
+    <div class="left-buttons white-icon">
+      <button mat-icon-button aria-label="Vytvoriť" (click)="create.emit()">
+        <mat-icon>description</mat-icon>
+      </button>
+    </div>
   
+    <div class="right-buttons red-icon">
+      <button mat-icon-button aria-label="Vymazať" [disabled]="!selectedItem"
+        (click)="selectedItem && delete.emit(selectedItem)">
+        <mat-icon>delete</mat-icon>
+      </button>
+    </div>
+
+    <input 
+      type="text"
+      [(ngModel)]="searchTerm"
+      (keydown.enter)="enterPressed()"
+      placeholder="Hľadaj..."
+      class="navbar-search"
+    />
+
   
+   
+  </div>
   
+  <div class="active-filters" *ngIf="activeFilters.length">
+    <span class="filter-chip" *ngFor="let f of activeFilters; let i = index">
+      {{ f }}
+      <button mat-raised-button
+    (click)="removeFilterEvent.emit(i)"
+    class=" remove-filter-btn"
+            >
+            ×
+    </button>
+    </span>
+   
+    <button mat-raised-button
+    (click)="clearFiltersEvent.emit()"
+    class="clear-filters-btn"
+            >
+            Vymazať všetko
+    </button>
+    
+ 

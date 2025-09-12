@@ -5,17 +5,16 @@ import { tap, map } from 'rxjs/operators';
 import { TokenService } from './token.service';
 import { Observable, of } from 'rxjs';
 import { User } from '../interface/user.interface';
-
+import { environment } from '../../../enviroment/enviroment';
 
 
 @Injectable({
     providedIn: 'root'
 })
 export class UserService {
-    private apiUrl = 'http://127.0.0.1:8000/api/'
+    private readonly apiUrl = environment.apiUrl;
+
     private user: User | null = null;
-
-
 
 
     /** Získaj rolu aktuálneho používateľa */
@@ -26,8 +25,6 @@ export class UserService {
     isAdmin(): boolean {
         return this.getRole() === 'admin';
     }
-
-
 
     constructor(
         private http: HttpClient,

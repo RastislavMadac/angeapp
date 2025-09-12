@@ -1,40 +1,21 @@
+<app-navbar
+  [selectedItem]="selectedUser"
+  (create)="createNewUser()"
+  (delete)="deleteUser(selectedUser)"
+  (edit)="selectUser($event)">
+  </app-navbar>
 
 
 
-<div class="buttons">
+
+
  
-<button 
-mat-icon-button
-aria-label="Vytvorit"
-matTooltipClass="custom-tooltip"
-class="white-icon"
-matTooltip="Vytvoriť"
-matTooltipPosition="above"
-matTooltipShowDelay="300"
-
-            (click)="createNewUser()"
-            routerLinkActive="active">
-            <mat-icon>description</mat-icon>
-    </button>
-
-<button mat-icon-button
-matTooltip="Vymazať"
-matTooltipPosition="above"
-matTooltipShowDelay="300"
- aria-label="Vymazať"
-            (click)="deleteUser(selectedUser)"
-            class="red-icon"
-            >
-            <mat-icon>delete</mat-icon>
-    </button>
-
-  </div>
 <ng-template #detailTpl>
   <form *ngIf="userForm" [formGroup]="userForm" (ngSubmit)="saveUser()">
-    <label>Username: <input formControlName="username"></label><br>
+    <label>Použivateľ: <input formControlName="username"></label><br>
     <label>E-mail: <input formControlName="email"></label><br>
-    <label>First Name: <input formControlName="first_name"></label><br>
-    <label>Last Name: <input formControlName="last_name"></label><br>
+    <label>Krstné meno: <input formControlName="first_name"></label><br>
+    <label>Priezvisko: <input formControlName="last_name"></label><br>
     <label *ngIf="!selectedUser">Password: <input type="password" formControlName="password"></label><br>
     <label>Role:
       <select formControlName="role">
