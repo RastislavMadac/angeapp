@@ -60,7 +60,7 @@ class UserViewSet(viewsets.ModelViewSet):
         }, status=status.HTTP_201_CREATED)
     
 
-class ProductTypeViewSet(viewsets.ModelViewSet):
+class ProductTypeViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = ProductType.objects.all()
     serializer_class = ProductTypeSerializer
     permission_classes = [IsAuthenticated]
@@ -68,7 +68,7 @@ class ProductTypeViewSet(viewsets.ModelViewSet):
 # -----------------------
 # Category
 # -----------------------
-class CategoryViewSet(viewsets.ModelViewSet):
+class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
     permission_classes = [IsAuthenticated]
@@ -76,7 +76,7 @@ class CategoryViewSet(viewsets.ModelViewSet):
 # -----------------------
 # Unit
 # -----------------------
-class UnitViewSet(viewsets.ModelViewSet):
+class UnitViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Unit.objects.all()
     serializer_class = UnitSerializer
     permission_classes = [IsAuthenticated]
