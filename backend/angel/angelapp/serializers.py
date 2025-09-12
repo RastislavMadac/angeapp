@@ -67,15 +67,29 @@ class ProductSerializer(serializers.ModelSerializer):
     unit = UnitSerializer(read_only=True)
     product_type = ProductTypeSerializer(read_only=True)
 
+     # Pre zápis
+    category_id = serializers.PrimaryKeyRelatedField(
+        queryset=Category.objects.all(), source='category', write_only=True
+    )
+    unit_id = serializers.PrimaryKeyRelatedField(
+        queryset=Unit.objects.all(), source='unit', write_only=True
+    )
+    product_type_id = serializers.PrimaryKeyRelatedField(
+        queryset=ProductType.objects.all(), source='product_type', write_only=True
+    )
+
     class Meta:
         model = Product
         fields = [
             'id',
             'product_id',
             'internet_id',
-            'category',
-            'unit',
-            'product_type',
+'category',         # read-only
+    'unit',             # read-only
+    'product_type',     # read-only
+    'category_id',      # write-only
+    'unit_id',          # write-only
+    'product_type_id',  # write-only
             'is_serialized',
             'product_name',
             'description',
