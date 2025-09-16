@@ -2,6 +2,7 @@ import {
   Component, OnInit, ViewChild
 } from '@angular/core';
 import { UserService } from '../../servicies/user.service';
+import { FilterService } from '../../servicies/filter.service';
 import { User } from '../../interface/user.interface';
 import { Product } from '../../interface/product.interface';
 import { Category } from '../../interface/product.interface';
@@ -28,7 +29,7 @@ import { NavbarComponent } from '../navbar/navbar.component';
   styleUrls: ['./product.component.css']
 })
 export class ProductComponent implements OnInit {
-  @ViewChild(GenericTableComponent) table!: GenericTableComponent;
+
 
   isLoading = true;
   errorMessage = '';
@@ -36,8 +37,17 @@ export class ProductComponent implements OnInit {
   categories: Category[] = [];
   unit: Unit[] = [];
   productType: ProductType[] = [];
-  activeFilters: string[] = [];
 
+
+  selectedProduct: Product | null = null;
+  productForm: FormGroup | null = null;
+
+  constructor(
+    private productService: ProductService,
+    private userService: UserService,
+    private fb: FormBuilder,
+    private notify: NotificationService,
+    private filterService: FilterService) { }
 
   ngOnInit(): void {
     this.loadLookups().subscribe({
@@ -51,27 +61,21 @@ export class ProductComponent implements OnInit {
     });
   }
 
-  addFilter(filter: string) {
-    if (filter.trim() && !this.activeFilters.includes(filter.toLowerCase())) {
-      this.activeFilters.push(filter.toLowerCase());
-      this.table.addFilter(filter); // aplikuje filter aj v tabuľke
-    }
+  handleRowClick(row: any) {
+    this.selectedProduct = row;  // uchová vybraný produkt
+    console.log('Vybraný produkt:', row);
   }
 
-  removeFilter(index: number) {
-    this.activeFilters.splice(index, 1);
-    this.table.applyFilters(); // aplikuje aktualizované filtre
+  // keď chceš vytvoriť novýproduct
+  createNewProduct() {
+    this.selectedProduct = null;
+    this.initForm();
   }
 
-  clearFilters() {
-    this.activeFilters = [];
-    this.table.clearAllFilters();
-  }
-  onNavbarEnter(filter: string) {
-    if (!filter.trim()) return;
-
-    // pridáme filter iba do tabuľky
-    this.table.addFilter(filter);
+  onDeleteProduct(product: Product) {
+    // Odstráni zoznam
+    this.product = this.product.filter(p => p.id !== product.id);
+    this.selectedProduct = null; // zruší výber
   }
 
   loadLookups() {
@@ -92,8 +96,7 @@ export class ProductComponent implements OnInit {
     );
   }
 
-  selectedProduct: Product | null = null;   // klasická property
-  productForm: FormGroup | null = null;  // klasická property
+
 
   columns: TableColumn[] = [
     { key: 'id', label: 'Kód', type: 'number' },
@@ -119,11 +122,7 @@ export class ProductComponent implements OnInit {
   ]
 
 
-  constructor(
-    private productService: ProductService,
-    private userService: UserService,
-    private fb: FormBuilder,
-    private notify: NotificationService) { }
+
 
 
 
@@ -150,11 +149,7 @@ export class ProductComponent implements OnInit {
       }
     });
   }
-  // keď chceš vytvoriť novýproduct
-  createNewProduct() {
-    this.selectedProduct = null;
-    this.initForm();
-  }
+
   // inicializácia formulára pre edit alebo create
   initForm(product?: Product) {
 

@@ -1,4 +1,4 @@
-import { Component, Input, EventEmitter, Output } from '@angular/core';
+import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { UserService } from '../../servicies/user.service';
 import { Router } from '@angular/router';
 import { RouterModule } from '@angular/router';
@@ -8,6 +8,8 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { FormsModule } from '@angular/forms';
+import { FilterService } from '../../servicies/filter.service';
+import { Observable } from 'rxjs';
 
 @Component({
   selector: 'app-navbar',
@@ -16,54 +18,48 @@ import { FormsModule } from '@angular/forms';
   templateUrl: './navbar.component.html',
   styleUrls: ['./navbar.component.css'],
 })
-
-
-
 export class NavbarComponent<T = any> {
-  @Input() selectedItem: T | null = null;
-  @Input() showEdit = true;
-  @Input() activeFilters: string[] = [];
-  logoUrl = 'letter-a.png';
-  @Output() enter = new EventEmitter<string>();
-  @Output() create = new EventEmitter<void>();
-  @Output() delete = new EventEmitter<T>();
-  @Output() edit = new EventEmitter<T>();
-  @Output() addFilterEvent = new EventEmitter<string>();
-  @Output() removeFilterEvent = new EventEmitter<number>();
-  @Output() clearFiltersEvent = new EventEmitter<void>();
 
-  onCreate() { this.create.emit(); }
-  onDelete() { if (this.selectedItem) this.delete.emit(this.selectedItem); }
-  onEdit() { if (this.selectedItem) this.edit.emit(this.selectedItem); }
+  // ---------- UI / navigácia ----------
+  @Input() selectedItem: T | null = null;
+  @Output() deleteItem = new EventEmitter<T>();
+  @Output() create = new EventEmitter<void>();
+  @Output() edit = new EventEmitter<T>();
+
+  logoUrl = 'letter-a.png';
+
+  constructor(
+    private userService: UserService,
+    private router: Router,
+    private filterService: FilterService
+  ) {
+    this.filters$ = this.filterService.filters$; // vyhľadávanie
+  }
+
+  // ---------- Vyhľadávanie/filtrovanie ----------
+  filters$: Observable<string[]>;
   searchTerm = '';
 
-
-  constructor(private userService: UserService, private router: Router) { }
-
-
-  // vyhladavanie
   enterPressed() {
     const filter = this.searchTerm.trim();
     if (!filter) return;
-
-    // posielame von cez EventEmitter
-    this.enter.emit(filter);
-
+    this.filterService.addFilter(filter);
     this.searchTerm = '';
   }
 
-  applyFilters() {
-    throw new Error('Method not implemented.');
-  }
-  normalizeText(searchTerm: string): string {
-    throw new Error('Method not implemented.');
+  removeFilterAt(index: number) {
+    this.filterService.removeFilter(index);
   }
 
+  clearFilterAt() {
+    this.filterService.clearFilters();
+  }
 
+  // ---------- UI / navigácia ----------
   get user() {
-    return this.userService.getUser()
+    return this.userService.getUser();
   }
-  // getter sprístupní iba to, čo šablóna potrebuje
+
   get isAdmin(): boolean {
     return this.userService.isAdmin();
   }

@@ -10,7 +10,7 @@
   
     <!-- Pravá časť: používateľ + logout -->
     <div class="right-panel">
-      <span class="username"*ngIf="user">Prihlásený: {{ user.first_name }} {{ user.last_name }} </span>
+      <span class="username" *ngIf="user">Prihlásený: {{ user.first_name }} {{ user.last_name }} </span>
       <button mat-raised-button color="warn" (click)="logout()">Odhlásiť sa</button>
     </div>
   </mat-toolbar>
@@ -54,39 +54,25 @@
   
     <div class="right-buttons red-icon">
       <button mat-icon-button aria-label="Vymazať" [disabled]="!selectedItem"
-        (click)="selectedItem && delete.emit(selectedItem)">
+              (click)="selectedItem && deleteItem.emit(selectedItem)">
         <mat-icon>delete</mat-icon>
       </button>
     </div>
-
-    <input 
-      type="text"
-      [(ngModel)]="searchTerm"
-      (keydown.enter)="enterPressed()"
-      placeholder="Hľadaj..."
-      class="navbar-search"
-    />
-
-  
-   
-  </div>
-  
-  <div class="active-filters" *ngIf="activeFilters.length">
-    <span class="filter-chip" *ngFor="let f of activeFilters; let i = index">
-      {{ f }}
-      <button mat-raised-button
-    (click)="removeFilterEvent.emit(i)"
-    class=" remove-filter-btn"
-            >
-            ×
-    </button>
-    </span>
-   
-    <button mat-raised-button
-    (click)="clearFiltersEvent.emit()"
-    class="clear-filters-btn"
-            >
-            Vymazať všetko
-    </button>
     
- 
+
+   
+    <div class="navbar">
+      <input type="text" (keydown.enter)="enterPressed()"  placeholder="Hľadaj...stlač enter!"  [(ngModel)]="searchTerm"
+        class="navbar-search"/>
+    
+
+        <div class="active-filters" *ngIf="(filters$ | async)?.length">
+          <span class="filter-chip" *ngFor="let f of filters$ | async; let i = index">
+            {{ f }}
+            <button (click)="removeFilterAt(i)">×</button>
+          </span>
+          <button (click)="clearFilterAt()">Vymazať všetko</button>
+        </div>
+        
+    </div>
+    

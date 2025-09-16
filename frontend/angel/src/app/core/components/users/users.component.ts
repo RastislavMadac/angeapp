@@ -2,6 +2,7 @@ import {
   Component, OnInit
 } from '@angular/core';
 import { UserService } from '../../servicies/user.service';
+import { FilterService } from '../../servicies/filter.service';
 import { User } from '../../interface/user.interface';
 import { CommonModule } from '@angular/common';
 import { TableColumn } from '../../interface/tablecolumnn.interface';
@@ -29,8 +30,10 @@ export class UsersComponent implements OnInit {
 
 
 
+
   selectedUser: User | null = null;   // klasická property
   userForm: FormGroup | null = null;  // klasická property
+
 
 
   columns: TableColumn[] = [
@@ -42,7 +45,11 @@ export class UsersComponent implements OnInit {
     { key: 'created_at', label: 'Vytvorený', type: 'date' }
   ];
 
-  constructor(private userService: UserService, private fb: FormBuilder, private notify: NotificationService) { }
+  constructor(
+    private userService: UserService,
+    private fb: FormBuilder,
+    private notify: NotificationService,
+    private filterService: FilterService) { }
 
   ngOnInit(): void {
     this.loadUsers();
@@ -72,19 +79,19 @@ export class UsersComponent implements OnInit {
     });
   }
 
-  // selectUser(user: User) {
-  //   console.log('selectUser called', user);
-  //   this.selectedUser = user;
-  //   this.initForm(user);
-  // }
-
-
 
   // keď chceš vytvoriť nového používateľa
   createNewUser() {
     this.selectedUser = null;
     this.initForm();
   }
+
+  onDeleteUser(user: User) {
+    // Odstráni zoznam
+    this.users = this.users.filter(u => u.id !== user.id);
+    this.selectedUser = null; // zruší výber
+  }
+
 
   // inicializácia formulára pre edit alebo create
   initForm(user?: User) {
@@ -133,6 +140,7 @@ export class UsersComponent implements OnInit {
       if (this.userForm.value.username !== undefined) payload.username = this.userForm.value.username;
       // pridaj ďalšie polia, ktoré sa môžu meniť
       if (this.userForm.value.first_name !== undefined) payload.first_name = this.userForm.value.first_name;
+      if (this.userForm.value.last_name !== undefined) payload.last_name = this.userForm.value.last_name;
       // pridaj ďalšie polia, ktoré sa môžu meniť
       if (this.userForm.value.last_name !== undefined) payload.username = this.userForm.value.username;
       // pridaj ďalšie polia, ktoré sa môžu meniť

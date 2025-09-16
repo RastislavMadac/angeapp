@@ -1,27 +1,17 @@
-
-
-<!-- Tabuľka -->
 <table class="app-table">
   <thead>
     <tr>
-      <th *ngFor="let col of columns" [style.text-align]="col.align || 'left'" [style.width]="col.width || 'auto'">
-        {{ col.label }}
-      </th>
+      <!-- Hlavičky tabuľky -->
+      <th *ngFor="let col of headers">{{ col.label || col.key }}</th>
     </tr>
   </thead>
   <tbody>
-    <tr *ngFor="let row of filteredData"
-        (click)="onRowClick(row)"
-        [class.clickable-row]="true"
-        [class.highlight-row]="true"
-        [class.selected]="row === selectedItem">
-      <td *ngFor="let col of columns" [style.text-align]="col.align || 'left'">
-        <ng-container [ngSwitch]="col.type">
-          <span *ngSwitchCase="'date'">{{ getValue(row, col.key) | date:'dd.MM.yyyy' }}</span>
-          <span *ngSwitchCase="'boolean'">{{ getValue(row, col.key) ? 'Áno' : 'Nie' }}</span>
-          <span *ngSwitchCase="'number'">{{ getValue(row, col.key) }}</span>
-          <span *ngSwitchDefault>{{ getValue(row, col.key) }}</span>
-        </ng-container>
+    <tr *ngFor="let row of filteredData" 
+    (click)="onRowClick(row)"
+    [class.selected]="isSelected(row)"
+    >
+      <td *ngFor="let col of headers">
+        {{ getValue(row, col.key) }}
       </td>
     </tr>
   </tbody>

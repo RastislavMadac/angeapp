@@ -2,12 +2,14 @@ import { Component, OnInit } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { UserService } from './core/servicies/user.service';
 import { NotificationCenterComponent } from './core/components/notification-center/notification-center.component';
+import { NavbarComponent } from './core/components/navbar/navbar.component';
 
 
 @Component({
   selector: 'app-root',
   standalone: true,
   template: `<app-notification-center></app-notification-center>
+  
   <router-outlet></router-outlet>`,
   imports: [RouterOutlet, NotificationCenterComponent]
 })

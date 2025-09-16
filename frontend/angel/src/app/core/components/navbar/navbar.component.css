@@ -113,6 +113,8 @@ button.remove-filter-btn.mat-mdc-raised-button:hover {
     /* alebo max-width */
     padding: 5px 10px;
     border-radius: 5px;
+
+    margin-top: -14px;
     border: 1px solid #ccc;
 }
 

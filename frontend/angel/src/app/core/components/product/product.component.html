@@ -1,12 +1,8 @@
 <app-navbar
   [selectedItem]="selectedProduct"
-  [activeFilters]="activeFilters"
-  (enter)="onNavbarEnter($event)"
-  (create)="createNewProduct()"
-  (delete)="deleteProduct(selectedProduct)"
-  (edit)="selectProduct($event)"
-  (removeFilterEvent)="removeFilter($event)"
-  (clearFiltersEvent)="clearFilters()">
+  (deleteItem)="onDeleteProduct($event)"
+   (create)="createNewProduct()"
+   (edit)="selectProduct($event)">
 </app-navbar>
 
 
@@ -107,7 +103,6 @@
       [columns]="columns"
       [data]="product"
       [selectedItem]="selectedProduct"
-      [activeFilters]="activeFilters"
       (rowClick)="selectProduct($event)">
     </app-generic-table>
     </ng-template>

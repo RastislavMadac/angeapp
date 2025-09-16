@@ -1,11 +1,9 @@
 <app-navbar
-  [selectedItem]="selectedUser"
-  (create)="createNewUser()"
-  (delete)="deleteUser(selectedUser)"
-  (edit)="selectUser($event)">
-  </app-navbar>
-
-
+[selectedItem]="selectedUser"
+(deleteItem)="onDeleteUser($event)"
+(create)="createNewUser()"
+(edit)="selectUser($event)">
+</app-navbar>
 
 
 
