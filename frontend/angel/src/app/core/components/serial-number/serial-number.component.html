@@ -1,0 +1,62 @@
+<app-navbar
+  [selectedItem]="selectedProductSerialNumber"
+  (deleteItem)="onDeleteProduct($event)"
+  (create)="createNewProductSerialNumber()"
+  (edit)="selectProductSerialNumber($event)">
+</app-navbar>
+
+
+
+
+    
+    <ng-template #detailTpl>
+      <form *ngIf="productSerialNumberForm" [formGroup]="productSerialNumberForm" (ngSubmit)="saveProductSerialNumber()"class="product-grid">
+        <label class="product1">Serial ID:
+            <input [value]="selectedProductSerialNumber?.id" readonly>
+          </label><br>
+        
+          <label class="product2">Seriové číslo:
+            <input formControlName="serial_number">
+          </label><br>
+          <label class="product14">Produkt:
+            <select formControlName="product">
+                <option *ngFor="let p of product" [ngValue]="p">{{ p.product_name }}</option>
+              </select>
+              
+          </label><br>
+          <label class="product3">Vytvorené:
+            <input [value]="selectedProductSerialNumber?.created_at | date:'short'" readonly>
+
+          </label><br>
+          <button type="submit">{{ selectedProductSerialNumber ? 'Uložiť' : 'Vytvoriť' }}</button>
+
+        </form>  
+        
+         
+    </ng-template>
+    
+   
+    <app-master-layout
+    [masterTemplateInput]="masterTpl"
+    [detailTemplateInput]="detailTpl"
+    [items]="productSerialNumber"
+    [(selectedItem)]="selectedProductSerialNumber"
+    (select)="selectProductSerialNumber($event)">
+  </app-master-layout>
+  
+  <ng-template #masterTpl>
+    <app-generic-table
+      [columns]="columns"
+      [data]="productSerialNumber"
+      [selectedItem]="selectedProductSerialNumber"
+      (rowClick)="selectProductSerialNumber($event)">
+    </app-generic-table>
+  </ng-template>
+    
+ 
+    
+    
+    
+    
+    
+    

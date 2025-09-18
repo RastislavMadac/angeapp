@@ -101,6 +101,7 @@ export class UserService {
 
     // CREATE new user
     createUser(userData: Partial<User>): Observable<User> {
+        console.log('Sending JSON to API:', userData);
         return this.http.post<User>(`${this.apiUrl}users/`, userData);
     }
     // Delete user

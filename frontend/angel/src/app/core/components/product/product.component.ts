@@ -1,10 +1,11 @@
 import {
-  Component, OnInit, ViewChild
+  Component, OnInit
 } from '@angular/core';
 import { UserService } from '../../servicies/user.service';
 import { FilterService } from '../../servicies/filter.service';
-import { User } from '../../interface/user.interface';
+
 import { Product } from '../../interface/product.interface';
+
 import { Category } from '../../interface/product.interface';
 import { Unit } from '../../interface/product.interface';
 import { ProductType } from '../../interface/product.interface';
@@ -66,7 +67,7 @@ export class ProductComponent implements OnInit {
     console.log('Vybraný produkt:', row);
   }
 
-  // keď chceš vytvoriť novýproduct
+  //  vytvoriť novýproduct
   createNewProduct() {
     this.selectedProduct = null;
     this.initForm();
@@ -102,8 +103,8 @@ export class ProductComponent implements OnInit {
     { key: 'id', label: 'Kód', type: 'number' },
     { key: 'product_id', label: 'Kód produktu', type: 'number' },
     { key: 'internet_id', label: 'Internét kód', type: 'number' },
-    { key: 'unit.short_name', label: 'Jednotka', type: 'text' },
-    { key: 'product_type.name', label: 'Typ karty', type: 'text', },
+    { key: 'unit_name', label: 'Jednotka', type: 'text' },
+    { key: 'product_type_name', label: 'Typ karty', type: 'text', },
     { key: 'is_serialized', label: 'Výrobná karta', type: 'boolean' },
     { key: 'product_name', label: 'Názov položky', type: 'text' },
     { key: 'description', label: 'Opis položky', type: 'text' },
@@ -120,13 +121,6 @@ export class ProductComponent implements OnInit {
     { key: 'updated_at', label: 'Dátum úpravy', type: 'date' },
     { key: 'updated_by', label: 'Upravil', type: 'number' }
   ]
-
-
-
-
-
-
-
 
 
   private loadProducts() {
@@ -158,11 +152,13 @@ export class ProductComponent implements OnInit {
       product_id: [product?.product_id || '', Validators.required],
       internet_id: [product?.internet_id || ''],
 
-      category: [this.categories.find(c => c.id === product?.category?.id) || null, Validators.required],
+      category: [this.categories.find(c => c.id === product?.category) || null, Validators.required],
 
-      unit: [this.unit.find(u => u.id === product?.unit?.id) || null, Validators.required],
 
-      product_type: [this.productType.find(pt => pt.id === product?.product_type?.id) || null, Validators.required],
+      unit: [this.unit.find(u => u.id === product?.unit) || null, Validators.required],
+
+      product_type: [this.productType.find(pt => pt.id === product?.product_type) || null, Validators.required],
+
 
       // tu je dôležité použiť presný objekt zo zoznamu
       is_serialized: [product?.is_serialized ?? false],
@@ -228,9 +224,10 @@ export class ProductComponent implements OnInit {
 
       if (formValue.product_id) payload.product_id = formValue.product_id;
       if (formValue.internet_id) payload.internet_id = formValue.internet_id;
-      if (formValue.category) payload.category_id = formValue.category.id;
-      if (formValue.unit) payload.unit_id = formValue.unit.id;
-      if (formValue.product_type) payload.product_type_id = formValue.product_type.id;
+      if (formValue.category) payload.category = formValue.category.id;
+      if (formValue.unit) payload.unit = formValue.unit.id;
+      if (formValue.product_type) payload.product_type = formValue.product_type.id;
+
       if (formValue.is_serialized !== undefined) payload.is_serialized = formValue.is_serialized;
       if (formValue.product_name) payload.product_name = formValue.product_name;
       if (formValue.description) payload.description = formValue.description;
@@ -257,10 +254,11 @@ export class ProductComponent implements OnInit {
         ...formValue,
         weight_item,
         price_no_vat,
-        category_id: formValue.category?.id,
-        unit_id: formValue.unit?.id,
-        product_type_id: formValue.product_type?.id
+        category: formValue.category?.id,       // <-- zmena
+        unit: formValue.unit?.id,               // <-- zmena
+        product_type: formValue.product_type?.id // <-- zmena
       };
+
 
       this.productService.createProduct(payload).subscribe({
         next: res => {

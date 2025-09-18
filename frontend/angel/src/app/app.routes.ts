@@ -30,6 +30,13 @@ export const routes: Routes = [
                     import('./core/components/product/product.component')
                         .then(m => m.ProductComponent),
             },
+            {
+                path: 'serialNumber',
+                // canActivate: [roleGuard],
+                loadComponent: () =>
+                    import('./core/components/serial-number/serial-number.component')
+                        .then(m => m.SerialNumberComponent),
+            },
             { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
         ],
     },

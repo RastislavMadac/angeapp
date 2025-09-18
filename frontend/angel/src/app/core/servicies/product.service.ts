@@ -38,6 +38,7 @@ export class ProductService {
 
     // CREATE new user
     createProduct(productData: Partial<Product>): Observable<Product> {
+        console.log('Sending JSON to API:', productData);
         return this.http.post<Product>(`${this.apiUrl}product/`, productData);
     }
     // Delete product

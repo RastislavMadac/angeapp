@@ -19,9 +19,12 @@ export interface Product {
     id: number;
     product_id: string;
     internet_id: string;
-    category: Category;
-    unit: Unit;
-    product_type: ProductType;
+    category: number;          // ID
+    category_name: string;     // názov
+    unit: number;              // ID
+    unit_name: string;         // názov
+    product_type: number;      // ID
+    product_type_name: string; // názo
     is_serialized: boolean;
     product_name: string;
     description: string;
