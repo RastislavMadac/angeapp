@@ -37,6 +37,13 @@ export const routes: Routes = [
                     import('./core/components/serial-number/serial-number.component')
                         .then(m => m.SerialNumberComponent),
             },
+            {
+                path: 'ingredient',
+                // canActivate: [roleGuard],
+                loadComponent: () =>
+                    import('./core/components/ingredient/ingredient.component')
+                        .then(m => m.ProductIngredientComponent),
+            },
             { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
         ],
     },

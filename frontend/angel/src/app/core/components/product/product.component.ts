@@ -33,7 +33,7 @@ export class ProductComponent implements OnInit {
 
 
   isLoading = true;
-  errorMessage = '';
+  errorMessage = ''
   product: Product[] = [];
   categories: Category[] = [];
   unit: Unit[] = [];
