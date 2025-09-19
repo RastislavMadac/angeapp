@@ -1,7 +1,7 @@
 from rest_framework import serializers
-from .models import User,Product, ProductType, Category, Unit
+from .models import User,Product, ProductType, Category, Unit,ProductInstance,ProductIngredient
 from rest_framework.authtoken.models import Token
-
+import re
 
 # USERS
 class UserSerializer(serializers.ModelSerializer):
@@ -61,34 +61,90 @@ class UnitSerializer(serializers.ModelSerializer):
 # -----------------------
 # Product
 # -----------------------
+
+
 class ProductSerializer(serializers.ModelSerializer):
-    # Voliteľne: zobraziť názvy súvisiacich objektov
-    category = CategorySerializer(read_only=True)
-    unit = UnitSerializer(read_only=True)
-    product_type = ProductTypeSerializer(read_only=True)
+    category_name = serializers.SerializerMethodField()
+    unit_name = serializers.SerializerMethodField()
+    product_type_name = serializers.SerializerMethodField()
+
+    category = serializers.PrimaryKeyRelatedField(queryset=Category.objects.all())
+    unit = serializers.PrimaryKeyRelatedField(queryset=Unit.objects.all())
+    product_type = serializers.PrimaryKeyRelatedField(queryset=ProductType.objects.all())
+
+    ingredients = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
         fields = [
-            'id',
-            'product_id',
-            'internet_id',
-            'category',
-            'unit',
-            'product_type',
-            'is_serialized',
-            'product_name',
-            'description',
-            'weight_item',
-            'internet',
-            'ean_code',
-            'qr_code',
-            'price_no_vat',
-            'total_quantity',
-            'reserved_quantity',
-            'free_quantity',
-            'created_by',
-            'created_at',
-            'updated_at',
-            'updated_by'
+            'id', 'product_id', 'internet_id', 'category', 'category_name',
+            'unit', 'unit_name', 'product_type', 'product_type_name',
+            'is_serialized', 'product_name', 'description', 'ingredients',
+            'weight_item', 'internet', 'ean_code', 'qr_code', 'price_no_vat',
+            'total_quantity', 'reserved_quantity', 'free_quantity',
+            'created_by', 'created_at', 'updated_at', 'updated_by'
         ]
+
+    def get_category_name(self, obj):
+         return obj.category.name if obj.category else None
+
+    def get_unit_name(self, obj):
+        return obj.unit.name if obj.unit else None
+
+    def get_product_type_name(self, obj):
+        return obj.product_type.name if obj.product_type else None
+
+    def get_ingredients(self, obj):
+        if obj.product_type.name.lower() == "vyrobok":
+            qs = ProductIngredient.objects.filter(product=obj)
+            return ProductIngredientSerializer(qs, many=True).data
+        return []
+
+
+# -----------------------
+# Product instance
+# -----------------------
+
+
+
+class ProductInstanceSerializer(serializers.ModelSerializer):
+    # len na čítanie, pri GET requestoch
+    product_name = serializers.CharField(source='product.product_name', read_only=True)
+    
+    # explicitne definujeme ForeignKey, aby sa pri create/update nevyhodil NULL
+    product = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all())
+
+    class Meta:
+        model = ProductInstance
+        fields = ["id", "product", "product_name", "serial_number", "created_at"]
+        read_only_fields = ["id", "created_at"]  # tieto polia sa neodovzdávajú pri POST/PUT
+        depth = 1
+
+    def validate_serial_number(self, value):
+        value = value.strip()  # odstráni medzery a taby
+        if not re.fullmatch(r"[0-9A-Fa-f]+", value):
+            raise serializers.ValidationError(
+                "Neplatné NFC UID – povolený je len hexadecimálny formát."
+            )
+        return value
+    
+
+
+
+class ProductIngredientSerializer(serializers.ModelSerializer):
+    product = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all())
+    ingredient_id = serializers.PrimaryKeyRelatedField(
+        queryset=Product.objects.filter(product_type__name__iexact="Surovina"),
+        source='ingredient'
+    )
+    ingredient_name = serializers.ReadOnlyField(source='ingredient.product_name')
+
+    class Meta:
+        model = ProductIngredient
+        fields = ['id', 'product', 'ingredient_id', 'ingredient_name', 'quantity']
+
+    def validate_ingredient(self, value):
+        if value.product_type.name.lower() != "surovina":
+            raise serializers.ValidationError("Ingrediencia musí byť produktu typu surovina.")
+        return value
+

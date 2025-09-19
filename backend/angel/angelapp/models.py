@@ -2,7 +2,10 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 
 
-# Create your models here.
+# -----------------------
+# User
+# -----------------------
+
 class User(AbstractUser):
     ROLE_CHOICES=[
          ('admin', 'Administrátor'),
@@ -19,13 +22,19 @@ class User(AbstractUser):
     def __str__(self):
         return f"{self.first_name} {self.last_name} "
     
-# PRODUCTS
+# -----------------------
+# Product Type
+# -----------------------
+
 class ProductType(models.Model):
     name= models.CharField(max_length=50, unique=True)
     description = models.TextField(blank=True, null=True)
 
     def __str__(self):
         return self.name
+# -----------------------
+# Category
+# -----------------------
 
 class Category(models.Model):
     """Kategória produktov"""
@@ -33,6 +42,9 @@ class Category(models.Model):
 
     def __str__(self):
         return self.name
+# -----------------------
+# Unit
+# -----------------------
 
 class Unit(models.Model):
     """Merná jednotka (ks, kg, l, m, …)"""
@@ -41,6 +53,10 @@ class Unit(models.Model):
 
     def __str__(self):
         return self.short_name
+
+# -----------------------
+# Product
+# -----------------------
 
 class Product(models.Model):
     """Hlavný produktový model"""
@@ -53,6 +69,14 @@ class Product(models.Model):
     category = models.ForeignKey(Category, on_delete=models.PROTECT, related_name="products")
     product_type = models.ForeignKey(ProductType, on_delete=models.PROTECT, related_name="products")
     unit = models.ForeignKey(Unit, on_delete=models.PROTECT, related_name="products")
+    
+    ingredients_m2m = models.ManyToManyField(
+    'self',
+    through='ProductIngredient',
+    symmetrical=False,
+    related_name='used_in'
+)
+
 
     # vlastnosti
     is_serialized = models.BooleanField(default=False)
@@ -83,3 +107,32 @@ class Product(models.Model):
 
     def __str__(self):
         return f"{self.product_name} [{self.product_type}]"
+
+# -----------------------
+# Product instance
+# -----------------------
+   
+class ProductInstance(models.Model):
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="instances")
+    serial_number = models.CharField(max_length=50, unique=True)  # NFC UID
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.product} - {self.serial_number}"
+    
+# -----------------------
+# Product ingredience
+# -----------------------
+
+class ProductIngredient(models.Model):
+    """Surovina použitá vo výrobku"""
+    product = models.ForeignKey(
+        Product, on_delete=models.CASCADE, related_name="ingredients"
+    )  # výrobok
+    ingredient = models.ForeignKey(
+        Product, on_delete=models.CASCADE, related_name="used_in_products"
+    )  # surovina
+    quantity = models.DecimalField(max_digits=10, decimal_places=3, help_text="Množstvo suroviny potrebné pre výrobok")
+
+    def __str__(self):
+        return f"{self.quantity} x {self.ingredient.product_name} pre {self.product.product_name}"

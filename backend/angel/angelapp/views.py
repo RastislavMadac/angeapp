@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from rest_framework import viewsets
-from .models import User,ProductType, Category, Unit, Product
-from .serializers import UserSerializer,ProductTypeSerializer, CategorySerializer, UnitSerializer, ProductSerializer
+from .models import User,ProductType, Category, Unit, Product,ProductInstance,ProductIngredient
+from .serializers import UserSerializer,ProductTypeSerializer, CategorySerializer, UnitSerializer, ProductSerializer,ProductInstanceSerializer,ProductIngredientSerializer
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied
@@ -9,6 +9,8 @@ from rest_framework.authtoken.models import Token
 from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
+from rest_framework import serializers
+
 
 class CurrentUserView(APIView):
     permission_classes = [IsAuthenticated]
@@ -88,4 +90,88 @@ class ProductViewSet(viewsets.ModelViewSet):
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """
+        Filtrovanie podľa query param 'type':
+        - ?type=vyrobok -> iba výrobky
+        - ?type=surovina -> iba suroviny
+        """
+        qs = super().get_queryset()
+        product_type = self.request.query_params.get('type')
+        if product_type:
+            qs = qs.filter(product_type__name=product_type)
+        return qs
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        # zobrazí presnú chybu do konzoly, ak validácia zlyhá
+        if not serializer.is_valid():
+            print(serializer.errors)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        return Response(serializer.data)
+
+    def perform_create(self, serializer):
+        """
+        Umožní automaticky nastaviť vytvárajúceho používateľa.
+        """
+        serializer.save(created_by=self.request.user)
+
+    def perform_update(self, serializer):
+        """
+        Automaticky nastaví používateľa, ktorý upravuje.
+        """
+        serializer.save(updated_by=self.request.user)
+
+# -----------------------
+# Product product
+# -----------------------
+class ManufacturedProductViewSet(viewsets.ModelViewSet):
+    serializer_class = ProductSerializer
+
+    def get_queryset(self):
+        return Product.objects.filter(product_type__name="Výrobok")
+# -----------------------
+# Product instance
+# -----------------------
+
+class ProductInstanceViewSet(viewsets.ModelViewSet):
+    queryset = ProductInstance.objects.all()
+    serializer_class = ProductInstanceSerializer
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        print("VALIDATED DATA:", serializer.validated_data)  # tu uvidíš, či je product
+        return super().create(request, *args, **kwargs)
+
+
+
+
+class ProductIngredientViewSet(viewsets.ModelViewSet):
+    queryset = ProductIngredient.objects.all()
+    serializer_class = ProductIngredientSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """
+        Môžeme filtrovať podľa produktu:
+        - ?product_id=1 -> iba ingrediencie pre výrobok s id=1
+        """
+        qs = super().get_queryset()
+        product_id = self.request.query_params.get('product_id')
+        if product_id:
+            qs = qs.filter(product_id=product_id)
+        return qs
+
+    def perform_create(self, serializer):
+        """
+        Zabezpečí, že ingredient je typu 'surovina' a uloží záznam.
+        """
+        ingredient = serializer.validated_data.get('ingredient')
+        if ingredient.product_type.name != "surovina":
+            raise serializers.ValidationError("Ingrediencia musí byť produktu typu surovina.")
+        serializer.save()
+
 
