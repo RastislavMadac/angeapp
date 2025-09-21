@@ -86,7 +86,7 @@ class ProductSerializer(serializers.ModelSerializer):
         ]
 
     def get_category_name(self, obj):
-         return obj.category.name if obj.category else None
+        return obj.category.name if obj.category else None
 
     def get_unit_name(self, obj):
         return obj.unit.name if obj.unit else None
@@ -99,6 +99,18 @@ class ProductSerializer(serializers.ModelSerializer):
             qs = ProductIngredient.objects.filter(product=obj)
             return ProductIngredientSerializer(qs, many=True).data
         return []
+
+    def validate(self, attrs):
+        # Ak sa mení typ produktu
+        if self.instance and 'product_type' in attrs:
+            new_type = attrs['product_type']
+            if self.instance.product_type != new_type:
+                # Skontrolovať, či je tento produkt použitý ako surovina
+                if ProductIngredient.objects.filter(ingredient=self.instance).exists():
+                    raise serializers.ValidationError(
+                        "Tento produkt je použitý ako surovina a jeho typ sa nedá zmeniť."
+                    )
+        return attrs
 
 
 # -----------------------
@@ -143,8 +155,7 @@ class ProductIngredientSerializer(serializers.ModelSerializer):
         model = ProductIngredient
         fields = ['id', 'product', 'ingredient_id', 'ingredient_name', 'quantity']
 
-    def validate_ingredient(self, value):
-        if value.product_type.name.lower() != "surovina":
-            raise serializers.ValidationError("Ingrediencia musí byť produktu typu surovina.")
-        return value
+    
+
+
 

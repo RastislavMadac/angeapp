@@ -59,26 +59,21 @@ class Unit(models.Model):
 # -----------------------
 
 class Product(models.Model):
-    """Hlavný produktový model"""
-    # identifikátory
     id = models.AutoField(primary_key=True)
     product_id = models.CharField(max_length=50, unique=True)
     internet_id = models.CharField(max_length=50, blank=True, null=True)
 
-    # väzby
     category = models.ForeignKey(Category, on_delete=models.PROTECT, related_name="products")
     product_type = models.ForeignKey(ProductType, on_delete=models.PROTECT, related_name="products")
     unit = models.ForeignKey(Unit, on_delete=models.PROTECT, related_name="products")
-    
+
     ingredients_m2m = models.ManyToManyField(
-    'self',
-    through='ProductIngredient',
-    symmetrical=False,
-    related_name='used_in'
-)
+        'self',
+        through='ProductIngredient',
+        symmetrical=False,
+        related_name='used_in'
+    )
 
-
-    # vlastnosti
     is_serialized = models.BooleanField(default=False)
     product_name = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
@@ -87,23 +82,16 @@ class Product(models.Model):
     ean_code = models.CharField(max_length=50, blank=True, null=True)
     qr_code = models.CharField(max_length=100, blank=True, null=True)
 
-    # ceny
     price_no_vat= models.DecimalField(max_digits=12, decimal_places=2)
 
-    # množstvá
     total_quantity = models.IntegerField(default=0)
     reserved_quantity = models.IntegerField(default=0)
     free_quantity = models.IntegerField(default=0)
 
-    # metadata
     created_at = models.DateTimeField(auto_now_add=True)
-    created_by = models.ForeignKey(
-        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="products_created"
-    )
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="products_created")
     updated_at = models.DateTimeField(auto_now=True)
-    updated_by = models.ForeignKey(
-        User, on_delete=models.SET_NULL, null=True, blank=True, related_name="products_updated"
-    )
+    updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="products_updated")
 
     def __str__(self):
         return f"{self.product_name} [{self.product_type}]"
@@ -125,14 +113,17 @@ class ProductInstance(models.Model):
 # -----------------------
 
 class ProductIngredient(models.Model):
-    """Surovina použitá vo výrobku"""
     product = models.ForeignKey(
-        Product, on_delete=models.CASCADE, related_name="ingredients"
+        Product, on_delete=models.CASCADE, related_name="ingredients_links"
     )  # výrobok
     ingredient = models.ForeignKey(
-        Product, on_delete=models.CASCADE, related_name="used_in_products"
+        Product, on_delete=models.CASCADE, related_name="ingredient_of_links"
     )  # surovina
     quantity = models.DecimalField(max_digits=10, decimal_places=3, help_text="Množstvo suroviny potrebné pre výrobok")
+
+    class Meta:
+        unique_together = ("product", "ingredient")   # 🔹 tu
+        # od Django 2.2+ sa odporúča používať constraints → viď nižšie
 
     def __str__(self):
         return f"{self.quantity} x {self.ingredient.product_name} pre {self.product.product_name}"

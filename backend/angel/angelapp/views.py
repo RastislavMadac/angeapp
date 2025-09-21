@@ -129,6 +129,7 @@ class ProductViewSet(viewsets.ModelViewSet):
 # -----------------------
 class ManufacturedProductViewSet(viewsets.ModelViewSet):
     serializer_class = ProductSerializer
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         return Product.objects.filter(product_type__name="Výrobok")
@@ -170,7 +171,7 @@ class ProductIngredientViewSet(viewsets.ModelViewSet):
         Zabezpečí, že ingredient je typu 'surovina' a uloží záznam.
         """
         ingredient = serializer.validated_data.get('ingredient')
-        if ingredient.product_type.name != "surovina":
+        if ingredient.product_type.name.lower() != "surovina":
             raise serializers.ValidationError("Ingrediencia musí byť produktu typu surovina.")
         serializer.save()
 
