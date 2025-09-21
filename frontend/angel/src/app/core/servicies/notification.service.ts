@@ -5,6 +5,18 @@ export type NotificationType = 'info' | 'warn';
 
 @Injectable({ providedIn: 'root' })
 export class NotificationService {
+    success(arg0: string) {
+        throw new Error('Method not implemented.');
+    }
+    error(arg0: string) {
+        throw new Error('Method not implemented.');
+    }
+    showSuccess(arg0: string) {
+        throw new Error('Method not implemented.');
+    }
+    showError(arg0: string) {
+        throw new Error('Method not implemented.');
+    }
     private notifySubject = new Subject<{ message: string, type?: NotificationType }>();
     private confirmSubject = new Subject<{ message: string, response: (result: boolean) => void }>();
 

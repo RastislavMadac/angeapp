@@ -1,79 +1,57 @@
- <!-- Navigačná lišta (ak ju chceš ponechať) -->
-<app-navbar></app-navbar>
-
-<!-- Tabuľka so zoznamom produktov -->
-<app-generic-table
-  [columns]="columns"
-  [data]="product"
-  (rowClick)="handleRowClick($event)">
-</app-generic-table>
-
-<!-- Info hlášky -->
-<div *ngIf="isLoading">Načítavam produkty...</div>
-<div *ngIf="errorMessage">{{ errorMessage }}</div>
-
- 
- 
- <!---<app-navbar
-[selectedItem]="selectedIngredient"
-(deleteItem)="deleteIngredient($event.id)"
-(create)="ingredientForm.reset()"
-(edit)="selectIngredient($event)">
+<app-navbar
+  [selectedItem]="selectedProduct"
+  (edit)="handleRowClick($event)">
 </app-navbar>
 
-<ng-template #detailTpl>
-<form [formGroup]="ingredientForm" (ngSubmit)="saveIngredient()" class="product-grid">
-  <label>Produkt:
-    <select formControlName="product">
-      <option *ngFor="let p of products" [ngValue]="p">{{ p.product_name }}</option>
-    </select>
-  </label><br>
-
-  <label>Ingrediencia:
-    <select formControlName="ingredient_id">
-      <ng-container *ngFor="let p of products">
-        <option *ngIf="p.product_type_name.toLowerCase() === 'surovina'" [ngValue]="p.id">
-            {{ p.product_name }}
-          </option>
-      </ng-container>
-    </select>
-  </label><br>
-
-  <label>Množstvo:
-    <input formControlName="quantity" type="number" step="0.001">
-  </label><br>
-
-  <button type="submit">{{ selectedIngredient ? 'Uložiť' : 'Vytvoriť' }}</button>
-</form>
-</ng-template>
+<app-master-layout
+  [masterTemplateInput]="masterTpl"
+  [detailTemplateInput]="detailTpl"
+  [items]="product"
+  [(selectedItem)]="selectedProduct"
+  (select)="handleRowClick($event)">
+</app-master-layout>
 
 <ng-template #masterTpl>
-<table>
-  <thead>
-    <tr>
-      <th>Produkt</th>
-      <th>Ingrediencia</th>
-      <th>Množstvo</th>
-   
-    </tr>
-  </thead>
-  <tbody>
-    <tr *ngFor="let ing of ingredients" (click)="selectIngredient(ing)">
-        <td>{{ getProductName(ing.product) }}</td>
+  <app-generic-table
+    [columns]="columns"
+    [data]="product"
+    [selectedItem]="selectedProduct"
+    (rowClick)="handleRowClick($event)">
+  </app-generic-table>
+</ng-template>
 
+<ng-template #detailTpl>
+  <h3>Ingrediencie pre produkt: {{ selectedProduct?.product_name }}</h3>
+
+  <table>
+    <tr *ngFor="let ing of ingredients">
       <td>{{ ing.ingredient_name }}</td>
       <td>{{ ing.quantity }}</td>
       <td>
-             </td>
+        <button (click)="editIngredient(ing)">Edit</button>
+        <button (click)="removeIngredient(ing)">Delete</button>
+      </td>
     </tr>
-  </tbody>
-</table>
-</ng-template>
+  </table>
 
-<app-master-layout
-[masterTemplateInput]="masterTpl"
-[detailTemplateInput]="detailTpl"
-[items]="ingredients"
-[(selectedItem)]="selectedIngredient"
-(select)="selectIngredient($event)">
-</app-master-layout> -->
+  <form [formGroup]="ingredientForm" (ngSubmit)="saveIngredient()">
+
+    <!-- Filter input -->
+    <input type="text" placeholder="Hľadať surovinu" (input)="onFilterChange($event)">
+  
+    <!-- Dropdown, zobrazuje len vyfiltrované položky -->
+    <select formControlName="ingredient_id" size="1">
+      <option *ngFor="let s of filteredIngredients()" [value]="s.id">
+        {{ s.product_name }}
+      </option>
+    </select>
+  
+    <input type="number" formControlName="quantity" step="0.01" min="0.01">
+  
+    <button type="submit">
+      {{ selectedIngredient ? 'Uložiť zmeny' : 'Pridať ingredienciu' }}
+    </button>
+    <button type="button" *ngIf="selectedIngredient" (click)="cancelEdit()">Zrušiť</button>
+  </form>
+  
+</ng-template>
