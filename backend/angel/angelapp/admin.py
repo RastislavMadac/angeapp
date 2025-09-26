@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import User, Product, ProductType, Category, Unit,ProductInstance,ProductIngredient
+from .models import User, Product, ProductType, Category, Unit,ProductInstance,ProductIngredient,City,Company
 from django.utils.translation import gettext_lazy as _
 
 @admin.register(User)
@@ -65,6 +65,16 @@ class ProductTypeAdmin(admin.ModelAdmin):
     list_display = ("id","name", "description")
     list_filter = ("id","name", "description")
     search_fields = ("id","name", "description")
+@admin.register(City)
+class CityAdmin(admin.ModelAdmin):
+    list_display = ("id","name", "postal_code", "country")
+    list_filter =  ("id","name", "postal_code", "country")
+    search_fields =  ("id","name", "postal_code", "country")
+
+@admin.register(Company)
+class CompanyAdmin(admin.ModelAdmin):
+    list_display = ('name', 'city', 'postal_code', 'is_legal_entity')
+    list_filter = ('is_legal_entity', 'city')
 
 
 

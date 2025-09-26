@@ -1,6 +1,6 @@
 from django.urls import path,include
 from rest_framework import routers 
-from .views import UserViewSet,CustomAuthToken,CurrentUserView, ProductTypeViewSet, CategoryViewSet, UnitViewSet, ProductViewSet,ProductInstanceViewSet,ProductIngredientViewSet,ManufacturedProductViewSet
+from .views import UserViewSet,CustomAuthToken,CurrentUserView, ProductTypeViewSet, CategoryViewSet, UnitViewSet, ProductViewSet,ProductInstanceViewSet,ProductIngredientViewSet,ManufacturedProductViewSet,ManufacturedIngredientsProductViewSet,CurrentUserView,CompanyViewSet
 
 router=routers.DefaultRouter() 
 router.register(r'users', UserViewSet)
@@ -11,6 +11,10 @@ router.register(r'product', ProductViewSet, basename='product')
 router.register(r'instance', ProductInstanceViewSet, basename='instance')
 router.register(r'ingredience', ProductIngredientViewSet, basename='ingredience')
 router.register(r'manufacture', ManufacturedProductViewSet, basename='manufacture')
+router.register(r'singredients', ManufacturedIngredientsProductViewSet, basename='singresients')
+router.register(r'customers', CompanyViewSet, basename='customers')
+
+
 
 
 urlpatterns = [

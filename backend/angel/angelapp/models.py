@@ -127,3 +127,52 @@ class ProductIngredient(models.Model):
 
     def __str__(self):
         return f"{self.quantity} x {self.ingredient.product_name} pre {self.product.product_name}"
+
+
+# -----------------------
+# Product ZipCode
+# -----------------------
+
+class City(models.Model):
+    postal_code = models.CharField(max_length=100)  # PSČ
+    name = models.CharField(max_length=100)  # Mesto
+    country = models.CharField(max_length=100, default="Slovensko")  # Štát
+
+    def __str__(self):
+        return f"{self.name} ({self.postal_code}), {self.country}"
+ #-----------------------
+# Product customerAdress
+#
+
+class Company(models.Model):
+    # Typ subjektu
+    is_legal_entity = models.BooleanField(default=True)  
+    internet_id = models.CharField(max_length=50, unique=True)
+    ico = models.CharField(max_length=12, blank=True, null=True)
+    dic = models.CharField(max_length=15, blank=True, null=True)
+    ic_dph = models.CharField(max_length=20, blank=True, null=True)
+
+    name = models.CharField(max_length=200)
+    address = models.CharField(max_length=300)
+    city = models.CharField(max_length=300, default='Unknown')
+    postal_code = models.CharField(max_length=20, blank=True, null=True)
+
+    delivery_address = models.CharField(max_length=300, blank=True, null=True)
+    delivery_city = models.CharField(max_length=300, blank=True, null=True)
+   
+    delivery_postal_code = models.CharField(max_length=20, blank=True, null=True)
+
+    phone = models.CharField(max_length=50, blank=True, null=True)
+    email = models.EmailField(blank=True, null=True)
+    website = models.URLField(blank=True, null=True)
+
+    
+   
+    def __str__(self):
+        return f"{self.name} ({'Právnická' if self.is_legal_entity else 'Fyzická'})"
+    
+    @property
+    def full_delivery_address(self):
+        return f"{self.delivery_address or self.address}, " \
+               f"{self.delivery_city or self.city}, " \
+               f"{self.delivery_postal_code or self.postal_code}"

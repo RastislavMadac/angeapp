@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from rest_framework import viewsets
-from .models import User,ProductType, Category, Unit, Product,ProductInstance,ProductIngredient
-from .serializers import UserSerializer,ProductTypeSerializer, CategorySerializer, UnitSerializer, ProductSerializer,ProductInstanceSerializer,ProductIngredientSerializer
+from .models import User,ProductType, Category, Unit, Product,ProductInstance,ProductIngredient,Company,City
+from .serializers import UserSerializer,ProductTypeSerializer, CategorySerializer, UnitSerializer, ProductSerializer,ProductInstanceSerializer,ProductIngredientSerializer,CompanySerializer
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied
@@ -134,6 +134,15 @@ class ManufacturedProductViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return Product.objects.filter(product_type__name="Výrobok")
 # -----------------------
+# Product product
+# -----------------------
+class ManufacturedIngredientsProductViewSet(viewsets.ModelViewSet):
+    serializer_class = ProductSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Product.objects.filter(product_type__name="Surovina")
+# -----------------------
 # Product instance
 # -----------------------
 
@@ -148,7 +157,9 @@ class ProductInstanceViewSet(viewsets.ModelViewSet):
         return super().create(request, *args, **kwargs)
 
 
-
+# -----------------------
+# Product ingredients
+# -----------------------
 
 class ProductIngredientViewSet(viewsets.ModelViewSet):
     queryset = ProductIngredient.objects.all()
@@ -174,5 +185,18 @@ class ProductIngredientViewSet(viewsets.ModelViewSet):
         if ingredient.product_type.name.lower() != "surovina":
             raise serializers.ValidationError("Ingrediencia musí byť produktu typu surovina.")
         serializer.save()
+
+# -----------------------
+# company
+# -----------------------
+
+class CompanyViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint pre správu spoločností.
+    Podporuje GET (list/detail), POST, PATCH, DELETE.
+    """
+    queryset = Company.objects.all()
+    serializer_class = CompanySerializer
+    permission_classes = [IsAuthenticated]  # uprav podľa potreby
 
 

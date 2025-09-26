@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User,Product, ProductType, Category, Unit,ProductInstance,ProductIngredient
+from .models import User,Product, ProductType, Category, Unit,ProductInstance,ProductIngredient, Company
 from rest_framework.authtoken.models import Token
 import re
 
@@ -141,6 +141,9 @@ class ProductInstanceSerializer(serializers.ModelSerializer):
         return value
     
 
+# -----------------------
+# Product ingredients
+# -----------------------
 
 
 class ProductIngredientSerializer(serializers.ModelSerializer):
@@ -156,6 +159,39 @@ class ProductIngredientSerializer(serializers.ModelSerializer):
         fields = ['id', 'product', 'ingredient_id', 'ingredient_name', 'quantity']
 
     
+# -----------------------
+# Serializer pre customers
+# -----------------------
+class CompanySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Company
+        fields = '__all__'
 
+    # Validácia IČO (8 číslic)
+    def validate_ico(self, value):
+        if value and not re.fullmatch(r'\d{8}', value):
+            raise serializers.ValidationError("IČO musí mať 8 číslic.")
+        return value
 
+    # Validácia DIČ (10-12 číslic)
+    def validate_dic(self, value):
+        if value and not re.fullmatch(r'\d{10,12}', value):
+            raise serializers.ValidationError("DIČ musí mať 10 až 12 číslic.")
+        return value
 
+    # Validácia IČ DPH (napr. SK + 10-13 číslic)
+    def validate_ic_dph(self, value):
+        if value and not re.fullmatch(r'(SK)?\d{10,13}', value):
+            raise serializers.ValidationError("IČ DPH musí byť platné.")
+        return value
+
+    # Voliteľne môžeš pridať čistú validáciu pre email alebo web:
+    def validate_email(self, value):
+        if value and '@' not in value:
+            raise serializers.ValidationError("Neplatný email.")
+        return value
+
+    def validate_website(self, value):
+        if value and not value.startswith(('http://', 'https://')):
+            raise serializers.ValidationError("Webová adresa musí začínať na http:// alebo https://")
+        return value
