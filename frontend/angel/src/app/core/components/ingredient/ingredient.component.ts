@@ -11,13 +11,15 @@ import { TableColumn } from '../../interface/tablecolumnn.interface';
 import { GenericTableComponent } from '../generic-table/generic-table.component';
 import { Product } from '../../interface/product.interface';
 import { ProductIngredient } from '../../interface/productIngredient';
+import { ItemSelectorComponent } from '../item-selector/item-selector.component';
+import { AddIngredientEvent } from '../../interface/newIngrredientEvent.interface';
 
 @Component({
   selector: 'app-product-ingredient',
   standalone: true,
   imports: [
     CommonModule, FormsModule, ReactiveFormsModule,
-    MasterLayoutComponent, GenericTableComponent, NavbarComponent
+    MasterLayoutComponent, GenericTableComponent, NavbarComponent, ItemSelectorComponent
   ],
   templateUrl: './ingredient.component.html',
   styleUrls: ['./ingredient.component.css']
@@ -34,10 +36,13 @@ export class ProductIngredientComponent implements OnInit {
   ingredients: ProductIngredient[] = [];
   allSuroviny: Product[] = [];
   selectedIngredient: ProductIngredient | null = null;
+  showModal = false;
 
   ingredientForm: FormGroup;
 
   filterText: string = '';
+
+
 
   columns: TableColumn[] = [
     { key: 'id', label: 'Kód', type: 'number' },
@@ -48,8 +53,8 @@ export class ProductIngredientComponent implements OnInit {
 
   constructor(
     private fb: FormBuilder,
-    private productService: ProductIngredientService,
-    private productMainService: ProductService,
+    private productIngredientsService: ProductIngredientService,
+    private productService: ProductService,
     private userService: UserService,
     private notify: NotificationService
   ) {
@@ -64,6 +69,7 @@ export class ProductIngredientComponent implements OnInit {
     this.loadAllSuroviny();
   }
 
+
   private loadProducts() {
     if (!this.userService.isLoggedIn()) {
       this.errorMessage = 'Nie ste prihlásený';
@@ -72,7 +78,7 @@ export class ProductIngredientComponent implements OnInit {
     }
 
     this.isLoading = true;
-    this.productService.loadAllProduct().subscribe({
+    this.productIngredientsService.loadAllProduct().subscribe({
       next: products => {
         this.product = products.map(p => ({ ...p, is_serialized: Boolean(p.is_serialized) }));
         this.isLoading = false;
@@ -89,8 +95,8 @@ export class ProductIngredientComponent implements OnInit {
     });
   }
 
-  private loadAllSuroviny() {
-    this.productMainService.loadAllProduct().subscribe(products => {
+  loadAllSuroviny() {
+    this.productService.loadAllProduct().subscribe(products => {
       this.allSuroviny = products.filter(p => p.product_type_name?.toLowerCase() === 'surovina');
     });
   }
@@ -100,8 +106,8 @@ export class ProductIngredientComponent implements OnInit {
     this.loadIngredients(product.id);
   }
 
-  private loadIngredients(productId: number) {
-    this.productService.loadIngredients(productId).subscribe({
+  loadIngredients(productId: number) {
+    this.productIngredientsService.loadIngredients(productId).subscribe({
       next: res => {
         this.ingredients = res;
       },
@@ -117,77 +123,79 @@ export class ProductIngredientComponent implements OnInit {
       return !this.ingredients.some(ing => ing.ingredient_id === surovina.id);
     });
   }
-
-  addIngredient() {
-    if (!this.selectedProduct) return;
-
-    const data = {
-      product: this.selectedProduct.id,
-      ingredient_id: this.ingredientForm.value.ingredient_id,
-      quantity: this.ingredientForm.value.quantity
-    };
-
-    this.productService.createIngredientManufacture(data).subscribe({
-      next: () => {
-        this.ingredientForm.reset({ quantity: 1 });
-        this.loadIngredients(this.selectedProduct!.id);
-      },
-      error: err => console.error('Chyba pri pridávaní ingrediencie', err)
-    });
-  }
-
-  editIngredient(ing: ProductIngredient) {
-    this.selectedIngredient = ing;
-    this.ingredientForm.setValue({
-      ingredient_id: ing.ingredient_id,
-      quantity: ing.quantity
-    });
-  }
-
-  removeIngredient(ing: ProductIngredient) {
-    this.productService.deleteIngredient(ing.id).subscribe({
-      next: () => this.loadIngredients(this.selectedProduct!.id),
-      error: err => console.error('Chyba pri odstraňovaní ingrediencie', err)
-    });
-  }
-
-  saveIngredient() {
-    if (!this.selectedProduct) return;
-
-    const data = {
-      product: this.selectedProduct.id,
-      ingredient_id: this.ingredientForm.value.ingredient_id,
-      quantity: this.ingredientForm.value.quantity
-    };
-
-    if (this.selectedIngredient) {
-      this.productService.updateIngredient(this.selectedIngredient.id, data).subscribe({
-        next: () => {
-          this.selectedIngredient = null;
-          this.ingredientForm.reset({ quantity: 1 });
-          this.loadIngredients(this.selectedProduct!.id);
-        },
-        error: err => console.error('Chyba pri ukladaní ingrediencie', err)
-      });
-    } else {
-      this.addIngredient();
+  updateIngredientQuantity(ingredient: ProductIngredient) {
+    if (!ingredient.id) {
+      console.error('Ingrediencia nemá ID v DB');
+      return;
     }
+
+    const ingredientData: Partial<ProductIngredient> = {
+      quantity: ingredient.quantity
+    };
+
+    this.productIngredientsService.updateIngredient(ingredient.id, ingredientData)
+      .subscribe({
+        next: updatedIngredient => {
+          console.log('Množstvo aktualizované:', updatedIngredient);
+          // lokálna aktualizácia (voliteľná)
+          const idx = this.ingredients.findIndex(i => i.id === updatedIngredient.id);
+          if (idx !== -1) {
+            this.ingredients[idx].quantity = updatedIngredient.quantity;
+          }
+        },
+        error: err => console.error('Chyba pri aktualizácii množstva', err)
+      });
   }
 
-  cancelEdit() {
-    this.selectedIngredient = null;
-    this.ingredientForm.reset({ quantity: 1 });
+  deleteIngredient(ingredient: ProductIngredient) {
+    if (!ingredient.id) return;
+
+    this.productIngredientsService.deleteIngredient(ingredient.id).subscribe({
+      next: () => {
+        console.log('Ingrediencia vymazaná:', ingredient);
+
+        // odstránime ingredienciu z lokálneho zoznamu
+        this.ingredients = this.ingredients.filter(i => i.id !== ingredient.id);
+
+
+      },
+      error: err => console.error('Chyba pri vymazaní ingrediencie', err)
+    });
   }
 
-  onFilterChange(event: Event) {
-    const value = (event.target as HTMLInputElement).value;
-    this.filterText = value.toLowerCase();
+
+  //-----------------------
+  //Modal window
+  //-----------------------
+  openModal() {
+    this.showModal = true
+  }
+  closeModal() {
+    this.showModal = false
   }
 
-  // Metóda vracajúca len vyfiltrované ingrediencie
-  filteredIngredients(): Product[] {
-    const filtered = this.availableIngredients();
-    if (!this.filterText) return filtered;
-    return filtered.filter(s => s.product_name.toLowerCase().includes(this.filterText));
+  onAddIngredient(event: AddIngredientEvent) {
+    if (!this.selectedProduct) return;
+
+    const payload = {
+      product: this.selectedProduct.id,
+      ingredient_id: event.ingredient.ingredient_id,
+      quantity: event.quantity
+    };
+
+    this.productIngredientsService.createIngredientManufacture(payload).subscribe({
+      next: savedIngredient => {
+        this.ingredients.push(savedIngredient);
+        this.closeModal();
+      },
+      error: err => console.error('Chyba pri ukladaní ingrediencie', err)
+    });
+
+
+
+    this.closeModal();
   }
+
+
+
 }

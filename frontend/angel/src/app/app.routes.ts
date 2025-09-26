@@ -44,6 +44,13 @@ export const routes: Routes = [
                     import('./core/components/ingredient/ingredient.component')
                         .then(m => m.ProductIngredientComponent),
             },
+            {
+                path: 'customers',
+                // canActivate: [roleGuard],
+                loadComponent: () =>
+                    import('./core/components/customers/customers.component')
+                        .then(m => m.CustomersComponent),
+            },
             { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
         ],
     },

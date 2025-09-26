@@ -47,6 +47,11 @@
             routerLinkActive="active">
       Kusovníky
     </button>
+    <button mat-raised-button
+            [routerLink]="['/customers']"
+            routerLinkActive="active">
+      Zákaznici
+    </button>
   </div>
 
 
@@ -67,7 +72,10 @@
 
    
     <div class="navbar">
-      <input type="text" (keydown.enter)="enterPressed()"  placeholder="Hľadaj...stlač enter!"  [(ngModel)]="searchTerm"
+      <input type="text" 
+      (keydown.enter)="enterPressed()"
+        placeholder="Hľadaj...stlač enter!" 
+         [(ngModel)]="searchTerm"
         class="navbar-search"/>
     
 

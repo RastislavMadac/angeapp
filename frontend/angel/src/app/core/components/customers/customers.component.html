@@ -1,0 +1,96 @@
+<app-navbar
+  [selectedItem]="selectedCustomer"
+  (create)="createNewCustomer()"
+  (edit)="selectCustomer($event)"
+  (deleteItem)="onDeleteCustomer($event)">
+</app-navbar>
+
+<ng-template #detailTpl>
+  <form *ngIf="customerForm" [formGroup]="customerForm" (ngSubmit)="saveCustomer()" class="product-grid">
+
+    <label class="product1">ID:
+      <input formControlName="id" readonly>
+    </label>
+
+    <label class="product2">Internet ID:
+      <input formControlName="internet_id">
+    </label>
+
+    <label class="product3">Názov spoločnosti:
+      <input formControlName="name">
+    </label>
+
+    <label class="product4">Adresa:
+      <textarea formControlName="address"></textarea>
+    </label>
+
+    <label class="product5">PSČ:
+      <input formControlName="postal_code">
+    </label>
+
+    <label class="product6">Mesto:
+      <input formControlName="city">
+    </label>
+
+    <label class="product7">Doručovacia adresa:
+      <textarea formControlName="delivery_address"></textarea>
+    </label>
+
+    <label class="product8">Doručovacie mesto:
+      <input formControlName="delivery_city">
+    </label>
+
+    <label class="product9">Doručacie PSČ:
+      <input formControlName="delivery_postal_code">
+    </label>
+
+    <label class="product10">Právnická osoba:
+      <input type="checkbox" formControlName="is_legal_entity">
+    </label>
+
+    <label class="product11">IČO:
+      <input formControlName="ico">
+    </label>
+
+    <label class="product12">DIČ:
+      <input formControlName="dic">
+    </label>
+
+    <label class="product13">IČ DPH:
+      <input formControlName="ic_dph">
+    </label>
+
+    <label class="product14">Telefón:
+      <input formControlName="phone">
+    </label>
+
+    <label class="product15">Email:
+      <input formControlName="email">
+    </label>
+
+    <label class="product16">Web:
+      <input formControlName="website">
+    </label>
+
+    <button type="submit" [disabled]="!customerForm || customerForm.invalid">
+      {{ selectedCustomer ? 'Uložiť' : 'Vytvoriť' }}
+    </button>
+  </form>
+</ng-template>
+
+<app-master-layout
+  [masterTemplateInput]="masterTpl"
+  [detailTemplateInput]="detailTpl"
+  [items]="customer"
+  [(selectedItem)]="selectedCustomer"
+  (select)="selectCustomer($event)">
+</app-master-layout>
+
+<ng-template #masterTpl>
+  <app-generic-table
+    [columns]="columns"
+    [data]="customer"
+    [selectedItem]="selectedCustomer"
+    (rowClick)="selectCustomer($event)">
+  </app-generic-table>
+</ng-template>

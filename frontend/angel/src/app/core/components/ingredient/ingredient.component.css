@@ -15,3 +15,28 @@ td {
     gap: 0.5rem;
     margin-bottom: 1rem;
 }
+
+.ingredient-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 10px 0;
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+.ingredient-list li {
+    padding: 6px 10px;
+    cursor: pointer;
+}
+
+.ingredient-list li:hover {
+    background: #f0f0f0;
+}
+
+.ingredient-list li.selected {
+    background: #007bff;
+    color: white;
+    font-weight: bold;
+}

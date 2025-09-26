@@ -26,32 +26,25 @@
   <table>
     <tr *ngFor="let ing of ingredients">
       <td>{{ ing.ingredient_name }}</td>
-      <td>{{ ing.quantity }}</td>
-      <td>
-        <button (click)="editIngredient(ing)">Edit</button>
-        <button (click)="removeIngredient(ing)">Delete</button>
-      </td>
+      
+      <input type="number" [(ngModel)]="ing.quantity"/>
+    <button (click)="updateIngredientQuantity(ing)">Uložiť</button>
+    <button (click)="deleteIngredient(ing)">Vymazať</button>
+      
     </tr>
   </table>
-
-  <form [formGroup]="ingredientForm" (ngSubmit)="saveIngredient()">
-
-    <!-- Filter input -->
-    <input type="text" placeholder="Hľadať surovinu" (input)="onFilterChange($event)">
+  <button (click)="openModal()">Pridať Surovinu</button>
   
-    <!-- Dropdown, zobrazuje len vyfiltrované položky -->
-    <select formControlName="ingredient_id" size="1">
-      <option *ngFor="let s of filteredIngredients()" [value]="s.id">
-        {{ s.product_name }}
-      </option>
-    </select>
+  <app-item-selector 
+  *ngIf="showModal " 
+  [productId]="selectedProduct?.id ?? 0"
+  [productName]="selectedProduct?.product_name ?? ''"
+  [existingIngredients]="ingredients"
+  (addIngredient)="onAddIngredient($event)"
+  (close)="closeModal()"
+  class="modal">
   
-    <input type="number" formControlName="quantity" step="0.01" min="0.01">
-  
-    <button type="submit">
-      {{ selectedIngredient ? 'Uložiť zmeny' : 'Pridať ingredienciu' }}
-    </button>
-    <button type="button" *ngIf="selectedIngredient" (click)="cancelEdit()">Zrušiť</button>
-  </form>
+</app-item-selector>
+ 
   
 </ng-template>

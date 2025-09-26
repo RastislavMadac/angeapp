@@ -1,0 +1,26 @@
+<div class="top-header">
+   
+<div class="modal-overlay"
+
+(click)="onClose()">
+    
+    <div class="modal-content" (click)="$event.stopPropagation()">
+      
+      <h3>Ingrediencie pre produkt: {{ productName }}</h3>
+      <input 
+      type="text"  
+      placeholder="Hľadaj!"
+      [(ngModel)]="searchTerm"
+      (ngModelChange)="onSearchValue($event)"
+      />
+      <ul>
+        <li *ngFor="let i of filteredItems" > {{ i.product_name }} ({{ i.product_type_name }}) 
+            <input type="number" min="0" [(ngModel)]="quantities[i.id]" 
+            placeholder="Množstvo" />
+    <button (click)="onSelectIngredients(i)">Pridať</button>
+        </li>
+      </ul>
+      <button (click)="onClose()">Zatvoriť</button>
+    </div>
+  </div>
+</div>
