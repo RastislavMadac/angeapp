@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from rest_framework import viewsets
-from .models import User,ProductType, Category, Unit, Product,ProductInstance,ProductIngredient,Company,City
-from .serializers import UserSerializer,ProductTypeSerializer, CategorySerializer, UnitSerializer, ProductSerializer,ProductInstanceSerializer,ProductIngredientSerializer,CompanySerializer
+from .models import User,ProductType, Category, Unit, Product,ProductInstance,ProductIngredient,Company,Order,OrderItem
+from .serializers import UserSerializer,ProductTypeSerializer, CategorySerializer, UnitSerializer, ProductSerializer,ProductInstanceSerializer,ProductIngredientSerializer,CompanySerializer,OrderItemSerializer,OrderSerializer
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied
@@ -10,6 +10,9 @@ from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import serializers
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+
 
 
 class CurrentUserView(APIView):
@@ -200,3 +203,60 @@ class CompanyViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]  # uprav podľa potreby
 
 
+# -----------------------
+# order
+# -----------------------
+
+class OrderViewSet(viewsets.ModelViewSet):
+    queryset = Order.objects.all()  # <- pridaj toto, kvôli routeru
+    serializer_class = OrderSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        user_role = getattr(user, "role", None)
+
+        if user_role == "admin":
+            return Order.objects.all().select_related(
+                "customer", "created_who", "edited_who"
+            ).prefetch_related("items")
+        elif user_role in ["manager", "worker"]:
+            return Order.objects.filter(created_who=user).select_related(
+                "customer", "created_who", "edited_who"
+            ).prefetch_related("items")
+        else:
+            return Order.objects.none()
+
+
+    def perform_create(self, serializer):
+        serializer.save(created_who=self.request.user, edited_who=self.request.user)
+
+    def perform_update(self, serializer):
+        if serializer.instance.status in ["completed", "canceled"]:
+            raise PermissionDenied("You cannot edit a completed or canceled order.")
+        serializer.save(edited_who=self.request.user)
+# -----------------------
+# order Item
+# -----------------------
+
+class OrderItemViewSet(viewsets.ModelViewSet):
+    queryset = OrderItem.objects.all().select_related("order", "product")
+    serializer_class = OrderItemSerializer
+    permission_classes = [IsAuthenticated]
+
+@api_view(['GET'])
+def get_product_by_code(request):
+    code = request.query_params.get('code')  # čítame parameter "code"
+    if not code:
+        return Response({"detail": "Missing code parameter"}, status=400)
+    
+    try:
+        product = Product.objects.get(product_id=code)  # hľadáme podľa kódu produktu
+        return Response({
+            "id": product.id,                     # interné DB id
+            "name": product.product_name,                 # alebo product.product_name, podľa modelu
+            "product_id": product.product_id,     # kód produktu
+            "price": product.price_no_vat
+        })
+    except Product.DoesNotExist:
+        return Response({}, status=404)

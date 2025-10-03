@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
+from django.utils import timezone
 
 
 # -----------------------
@@ -142,7 +143,7 @@ class City(models.Model):
         return f"{self.name} ({self.postal_code}), {self.country}"
  #-----------------------
 # Product customerAdress
-#
+ #-----------------------
 
 class Company(models.Model):
     # Typ subjektu
@@ -176,3 +177,51 @@ class Company(models.Model):
         return f"{self.delivery_address or self.address}, " \
                f"{self.delivery_city or self.city}, " \
                f"{self.delivery_postal_code or self.postal_code}"
+
+
+
+#-----------------------
+# order
+#-----------------------
+
+class Order(models.Model):
+    order_number = models.CharField(max_length=20, blank=True, null=True)  # nové pole
+    customer = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="orders")
+    created_at = models.DateTimeField(default=timezone.now)
+    created_who=models.ForeignKey(User,on_delete=models.CASCADE, related_name="whoCreated")
+    edited_at = models.DateTimeField(default=timezone.now)
+    edited_who=models.ForeignKey(User,on_delete=models.CASCADE, related_name="whoEdited")
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ("pending", "Čaká sa"),
+            ("processing", "Spracováva sa"),
+            ("completed", "Dokončená"),
+            ("canceled", "Zrušená"),
+        ],
+        default="pending",
+    )
+
+    def __str__(self):
+        return f"Objednávka #{self.id} - {self.customer.name}"
+
+    @property
+    def total_price(self):
+        return sum(item.total_price for item in self.items.all())
+
+
+#-----------------------
+# orderItem
+#-----------------------
+class OrderItem(models.Model):
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="items")
+    product = models.ForeignKey(Product, on_delete=models.PROTECT)
+    quantity = models.PositiveIntegerField(default=1)
+    price = models.DecimalField(max_digits=10, decimal_places=2, default=0)  # cena v čase objednávky
+
+    def __str__(self):
+        return f"{self.quantity} x {self.product.product_name}"
+
+    @property
+    def total_price(self):
+       return (self.quantity or 0) * (self.price or 0)

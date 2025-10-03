@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import User, Product, ProductType, Category, Unit,ProductInstance,ProductIngredient,City,Company
+from .models import User, Product, ProductType, Category, Unit,ProductInstance,ProductIngredient,City,Company,Order,OrderItem
 from django.utils.translation import gettext_lazy as _
 
 @admin.register(User)
@@ -73,9 +73,51 @@ class CityAdmin(admin.ModelAdmin):
 
 @admin.register(Company)
 class CompanyAdmin(admin.ModelAdmin):
-    list_display = ('name', 'city', 'postal_code', 'is_legal_entity')
+    list_display = ('id','name', 'city', 'postal_code', 'is_legal_entity')
     list_filter = ('is_legal_entity', 'city')
 
 
+# -----------------------
+# OrderItem
+# -----------------------
+@admin.register(OrderItem)
+class OrderItemAdmin(admin.ModelAdmin):
+    list_display = ("id", "product", "quantity", "price", "total_price")
+    readonly_fields = ("total_price",)
 
+# -----------------------
+# Order
+# -----------------------
+@admin.register(Order)
+class OrderAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "order_number",
+        "customer",
+        "created_at",
+        "created_who",
+        "edited_at",
+        "edited_who",
+        "status",
+        "display_items",
+        "total_price",
+    )
+    readonly_fields = ("total_price",)
 
+    def display_items(self, obj):
+        return ", ".join([f"{item.product.product_name}({item.quantity})" for item in obj.items.all()])
+    display_items.short_description = "Items"
+
+        # Voliteľne: inline pre rýchle úpravy položiek
+    inlines = []
+
+# -----------------------
+# Inline OrderItem pre Order
+# -----------------------
+class OrderItemInline(admin.TabularInline):
+    model = OrderItem
+    extra = 1  # počet prázdnych riadkov pre pridanie nových položiek
+    readonly_fields = ("total_price",)
+
+# Pridať inline do OrderAdmin
+OrderAdmin.inlines = [OrderItemInline]

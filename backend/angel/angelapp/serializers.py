@@ -1,7 +1,10 @@
 from rest_framework import serializers
-from .models import User,Product, ProductType, Category, Unit,ProductInstance,ProductIngredient, Company
+from rest_framework.exceptions import ValidationError
+from .models import User,Product, ProductType, Category, Unit,ProductInstance,ProductIngredient, Company,Order,OrderItem
 from rest_framework.authtoken.models import Token
 import re
+
+from django.utils import timezone
 
 # USERS
 class UserSerializer(serializers.ModelSerializer):
@@ -195,3 +198,136 @@ class CompanySerializer(serializers.ModelSerializer):
         if value and not value.startswith(('http://', 'https://')):
             raise serializers.ValidationError("Webová adresa musí začínať na http:// alebo https://")
         return value
+    
+   
+
+    # -----------------------
+# Serializer pre orderItem
+# -----------------------
+
+class OrderItemSerializer(serializers.ModelSerializer):
+    product = serializers.StringRelatedField(read_only=True)
+    product_name = serializers.CharField(source='product.name', read_only=True)
+    product_code = serializers.CharField(source='product.product_id', read_only=True)
+
+    product_id = serializers.PrimaryKeyRelatedField(
+        queryset=Product.objects.all(),
+        source="product"  # stále mapuje na FK
+        # odstránil som write_only=True
+    )
+    total_price = serializers.SerializerMethodField()
+
+
+    class Meta:
+        model = OrderItem
+        fields = ["id", "product_id", "product", "product_name", "product_code", "quantity", "price", "total_price"]
+        read_only_fields = ["id", "product", "product_name", "product_code", "total_price"]
+
+    def get_total_price(self, obj):
+        return (obj.quantity or 0) * (obj.price or 0)
+
+    def validate_price(self, value):
+        if value is None:
+            raise serializers.ValidationError("Price is required for each order item.")
+        if value < 0:
+            raise serializers.ValidationError("Price cannot be negative.")
+        return value
+
+ # -----------------------
+# Serializer pre order
+# -----------------------
+
+
+
+
+class OrderSerializer(serializers.ModelSerializer):
+    customer = serializers.StringRelatedField(read_only=True)
+    customer_id = serializers.PrimaryKeyRelatedField(
+        queryset=Company.objects.all(),
+        source="customer",
+        write_only=True
+    )
+
+    created_who = serializers.StringRelatedField(read_only=True)
+    edited_who = serializers.StringRelatedField(read_only=True)
+
+    order_number = serializers.CharField(read_only=True)
+    items = OrderItemSerializer(many=True)
+    total_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = Order
+        fields = [
+            "id",
+            "order_number",
+            "customer", "customer_id",
+            "created_at", "created_who",
+            "edited_at", "edited_who",
+            "status",
+            "items",
+            "total_price",
+        ]
+
+    def create(self, validated_data):
+        items_data = validated_data.pop("items", [])
+
+        # generovanie order_number
+        current_year = timezone.now().year
+        prefix = f"{current_year}PO"
+        last_order = Order.objects.filter(order_number__startswith=prefix).order_by("order_number").last()
+        last_number = int(last_order.order_number[-4:]) if last_order and last_order.order_number[-4:].isdigit() else 0
+        validated_data["order_number"] = f"{prefix}{str(last_number + 1).zfill(4)}"
+
+        # nastavíme používateľa
+        request = self.context.get("request")
+        if request and hasattr(request, "user"):
+            validated_data["created_who"] = request.user
+            validated_data["edited_who"] = request.user
+
+        order = Order.objects.create(**validated_data)
+
+        for item_data in items_data:
+            OrderItem.objects.create(order=order, **item_data)
+
+        return order
+
+    def update(self, instance, validated_data):
+        if instance.status in ["completed", "canceled"]:
+            raise ValidationError("You cannot edit a completed or canceled order.")
+
+        items_data = validated_data.pop("items", None)
+
+        # update hlavičky
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        # nastavíme edited_who
+        request = self.context.get("request")
+        if request and hasattr(request, "user"):
+            instance.edited_who = request.user
+
+        instance.save()
+
+        if items_data is not None:
+            existing_items = {item.id: item for item in instance.items.all()}
+            ids_in_request = []
+
+            for item_data in items_data:
+                item_id = item_data.get("id", None)
+                if item_id and item_id in existing_items:
+                    item = existing_items[item_id]
+                    item.quantity = item_data.get("quantity", item.quantity)
+                    item.price = item_data.get("price", item.price)
+                    item.product = item_data.get("product", item.product)
+                    item.save()
+                    ids_in_request.append(item.id)
+                else:
+                    new_item = OrderItem.objects.create(order=instance, **item_data)
+                    ids_in_request.append(new_item.id)
+
+            # vymaž položky, ktoré nie sú v requeste
+            for item in instance.items.all():
+                if item.id not in ids_in_request:
+                    item.delete()
+
+        return instance
