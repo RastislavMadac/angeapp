@@ -1,0 +1,75 @@
+<!-- Navbar -->
+<app-navbar
+  [selectedItem]="selectedOrder"
+  (deleteItem)="onDeleteOrder($event)"
+  (create)="createNewOrder()"
+  (edit)="selectOrder($event)">
+</app-navbar>
+
+<!-- Small navigation menu -->
+<app-small-navbar
+ [menuItems]="productMenu"
+ ></app-small-navbar>
+
+<!-- Detail template -->
+<ng-template #detailTpl>
+  <form *ngIf="orderForm" [formGroup]="orderForm" (ngSubmit)="saveOrder()">
+    <label>Číslo objednávky: 
+      <input formControlName="order_number">
+    </label><br>
+
+    <label>Zákazník: 
+      <input formControlName="customer">
+    </label><br>
+
+    <label>Celková cena: 
+      <input formControlName="total_price">
+    </label><br>
+
+    <label>Status:
+      <select formControlName="status">
+        <option value="pending">Prijatá</option>
+        <option value="processing">Spracovaná</option>
+        <option value="completed">Odoslaná</option>
+        <option value="canceled">Zrušená</option>
+      </select>
+    </label><br>
+
+    <button type="submit" [disabled]="orderForm.invalid">
+      {{ selectedOrder ? 'Uložiť' : 'Vytvoriť' }}
+    </button>
+  </form>
+</ng-template>
+
+<!-- Master layout -->
+<app-master-layout
+  [masterTemplateInput]="masterTpl"
+  [detailTemplateInput]="detailTpl"
+  [items]="orders"
+  [(selectedItem)]="selectedOrder"
+  (selectedItemChange)="onSelectedItemChange($event)"   
+  (select)="selectOrder($event)">
+</app-master-layout>
+
+
+
+<!-- Order items modal -->
+<app-order-items
+  *ngIf="showModal"
+  [order]="selectedOrder"
+  [items]="selectedOrderItems"
+  (close)="closeModal()"
+  (updated)="onOrderUpdated($event)">
+</app-order-items>
+
+
+<!-- Master table template -->
+<ng-template #masterTpl> 
+  <app-generic-table 
+    [columns]="columns" 
+    [data]="orders" 
+    (rowClick)="selectOrder($event)" 
+    [selectedItem]="selectedOrder" 
+    [rowClassMap]="getRowClass">
+  </app-generic-table> 
+</ng-template>

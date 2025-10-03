@@ -27,10 +27,6 @@ export class UsersComponent implements OnInit {
   isLoading = true;
   errorMessage = '';
   users: User[] = [];
-
-
-
-
   selectedUser: User | null = null;   // klasická property
   userForm: FormGroup | null = null;  // klasická property
 
@@ -41,9 +37,28 @@ export class UsersComponent implements OnInit {
     { key: 'last_name', label: 'Priezvisko', type: 'text' },
     { key: 'username', label: 'Používateľ', type: 'text' },
     { key: 'email', label: 'E-mail', type: 'text' },
+    { key: 'role', label: 'Rola', type: 'text' },
     { key: 'is_active', label: 'Aktívny', type: 'boolean', align: 'center' },
     { key: 'created_at', label: 'Vytvorený', type: 'date' }
   ];
+  statusCellClass = (status: string) => {
+
+    switch (status) {
+
+      case 'pending': return 'badge-pending';
+
+      case 'processing': return 'badge-processing';
+
+      case 'completed': return 'badge-completed';
+
+      case 'canceled': return 'badge-canceled';
+
+      default: return '';
+
+    }
+
+  };
+
 
   constructor(
     private userService: UserService,

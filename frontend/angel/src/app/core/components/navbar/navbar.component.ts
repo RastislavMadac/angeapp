@@ -10,6 +10,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { FormsModule } from '@angular/forms';
 import { FilterService } from '../../servicies/filter.service';
 import { Observable } from 'rxjs';
+import { DeleteService } from '../../servicies/delete.service';
 
 @Component({
   selector: 'app-navbar',
@@ -31,14 +32,22 @@ export class NavbarComponent<T = any> {
   constructor(
     private userService: UserService,
     private router: Router,
-    private filterService: FilterService
+    private filterService: FilterService,
+    private deleteService: DeleteService
   ) {
     this.filters$ = this.filterService.filters$; // vyhľadávanie
   }
 
+
+
   // ---------- Vyhľadávanie/filtrovanie ----------
   filters$: Observable<string[]>;
   searchTerm = '';
+
+
+  onDeleteClick() {
+    this.deleteService.triggerDelete();
+  }
 
   enterPressed() {
     const filter = this.searchTerm.trim();

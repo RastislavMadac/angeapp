@@ -6,7 +6,7 @@ export interface TableColumn {
     label: string;
 
     /** voliteľný typ stĺpca – pomáha pri formátovaní */
-    type?: 'text' | 'number' | 'date' | 'boolean';
+    type?: 'text' | 'number' | 'date' | 'boolean' | "object-array";
 
     /** voliteľne – stĺpec môže byť zarovnaný */
     align?: 'left' | 'center' | 'right';

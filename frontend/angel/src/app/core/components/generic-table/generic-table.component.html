@@ -1,18 +1,38 @@
-<table class="app-table">
-  <thead>
-    <tr>
-      <!-- Hlavičky tabuľky -->
-      <th *ngFor="let col of headers">{{ col.label || col.key }}</th>
-    </tr>
-  </thead>
-  <tbody>
+<table class="app-table"> 
+
+  <thead> 
+
+    <tr> 
+
+      <!-- Hlavičky tabuľky --> 
+
+      <th *ngFor="let col of headers">{{ col.label || col.key }}</th> 
+
+    </tr> 
+
+  </thead> 
+
+  <tbody> 
+
     <tr *ngFor="let row of filteredData" 
-    (click)="onRowClick(row)"
-    [class.selected]="isSelected(row)"
-    >
-      <td *ngFor="let col of headers">
-        {{ getValue(row, col.key) }}
-      </td>
-    </tr>
-  </tbody>
-</table>
+        (click)="onRowClick(row)" 
+        [class.selected]="isSelected(row)" 
+        [ngClass]="rowClassMap(row)">  
+
+      <td *ngFor="let col of headers"> 
+        {{ getValue(row, col.key) }} 
+      </td> 
+
+   
+    
+
+    </tr> 
+
+  </tbody> 
+
+   
+
+</table> 
+
+ 
+ 

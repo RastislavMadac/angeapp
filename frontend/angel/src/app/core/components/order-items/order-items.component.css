@@ -1,0 +1,25 @@
+app-orders-customers {
+    position: fixed;
+    background: white;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 1000;
+}
+
+
+.modal-overlay {
+    position: fixed;
+    top: 199px;
+    left: 0;
+    width: 100vw;
+    height: 50vh;
+    background: red;
+    margin: 10px -6px 0px 10px;
+    backdrop-filter: blur(5px);
+    /* rozmazanie pozadia */
+    z-index: 999;
+    /* pod modal content */
+
+}

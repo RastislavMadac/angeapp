@@ -1,0 +1,105 @@
+<app-navbar 
+   [selectedItem]="selectedItem" 
+>
+</app-navbar>
+
+
+<app-orders-customers
+*ngIf="showModal"
+(closeDoor)="closeModal()"
+(customerSelected)="onCustomerSelected($event)"
+></app-orders-customers>
+
+
+<div class="modal-overlay">
+  <!-- EDIT objednávky -->
+  <form [formGroup]="orderForm" class="order-detail-form">
+    <mat-form-field class="example-full-width">
+      <mat-label>Číslo objednávky</mat-label>
+      <input matInput type="text" formControlName="order_number">
+    </mat-form-field>
+  
+
+   
+      <mat-form-field class="example-full-width">
+        <mat-label>Zákazník</mat-label>
+        <input matInput formControlName="customer_name" >
+      </mat-form-field>
+      <button (click)="openModal()" matMiniFab aria-label="Example icon button with a menu icon">
+        <mat-icon>menu</mat-icon>
+      </button>
+    <label>Status:
+      <select formControlName="status">
+        <option value="pending">Prijatá</option>
+        <option value="processing">Spracovaná</option>
+        <option value="completed">Odoslaná</option>
+        <option value="canceled">Zrušená</option>
+      </select>
+    </label>
+
+    <label>Celková cena:</label>
+    <span>{{ orderForm.get('total_price')?.value | number:'1.2-2' }} €</span>
+    
+  </form>
+
+  <hr />
+
+  <h3>Položky objednávky:</h3>
+
+  <form *ngIf="itemsForm" [formGroup]="itemsForm" >
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Kód produktu</th>
+          <th>Produkt</th>
+          <th>Množstvo</th>
+          <th>Cena za kus</th>
+          <th>Celkom</th>
+        </tr>
+      </thead>
+      <tbody formArrayName="items">
+        <tr *ngFor="let itemCtrl of itemsArray.controls; let i = index"
+            [formGroupName]="i"
+            [class.selected]="i === selectedItemIndex"
+            (click)="selectItem(itemCtrl.value, i)">
+            
+          <td>{{ i + 1 }}</td>
+      
+          <!-- Kód produktu -->
+          <td>
+            <input type="text" formControlName="product_code" placeholder="Zadaj kód produktu">
+          </td>
+      
+          <!-- Názov produktu (read-only) -->
+          <td>
+            <input type="text" formControlName="product" readonly>
+          </td>
+      
+          <!-- Interné DB ID produktu (skryté) -->
+          <td style="display:none;">
+            <input type="hidden" formControlName="product_db_id">
+          </td>
+      
+          <!-- Množstvo -->
+          <td>
+            <input type="number" formControlName="quantity">
+          </td>
+      
+          <!-- Cena za kus -->
+          <td>
+            <input type="number" formControlName="price">
+          </td>
+      
+          <!-- Celková cena -->
+          <td>{{ (itemCtrl.value.quantity * itemCtrl.value.price) | number:'1.2-2' }} €</td>
+        </tr>
+      </tbody>
+      
+      
+      
+    </table>
+
+    <button (click)="saveItems()" type="submit" mat-button color="primary">Uložiť zmeny</button>
+  </form>
+</div>

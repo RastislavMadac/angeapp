@@ -1,24 +1,30 @@
 import { Component, OnInit } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
-import { forkJoin } from 'rxjs';
-import { CustomersInterface } from '../../interface/customer.interface';
-import { TableColumn } from '../../interface/tablecolumnn.interface';
-import { CustomerService } from '../../servicies/customers.service';
-import { UserService } from '../../servicies/user.service';
-import { NotificationService } from '../../servicies/notification.service';
-import { FilterService } from '../../servicies/filter.service';
 import { CommonModule } from '@angular/common';
-import { GenericTableComponent } from '../generic-table/generic-table.component';
-import { MasterLayoutComponent } from '../master-layout/master-layout.component';
 import { ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatTooltipModule } from '@angular/material/tooltip';
+
+// Interfaces
+import { CustomersInterface } from '../../interface/customer.interface';
+import { TableColumn } from '../../interface/tablecolumnn.interface';
+
+// Services
+import { CustomerService } from '../../servicies/customers.service';
+import { UserService } from '../../servicies/user.service';
+import { NotificationService } from '../../servicies/notification.service';
+import { FilterService } from '../../servicies/filter.service';
+
+// Components
+import { GenericTableComponent } from '../generic-table/generic-table.component';
+import { MasterLayoutComponent } from '../master-layout/master-layout.component';
 import { NavbarComponent } from '../navbar/navbar.component';
 
 @Component({
   selector: 'app-customers',
+  standalone: true,
   templateUrl: './customers.component.html',
   styleUrls: ['./customers.component.css'],
   imports: [
@@ -35,11 +41,14 @@ import { NavbarComponent } from '../navbar/navbar.component';
 })
 export class CustomersComponent implements OnInit {
 
-  isLoading = true;
-  errorMessage = '';
-  customer: CustomersInterface[] = [];
-  selectedCustomer: CustomersInterface | null = null;
-  customerForm: FormGroup | null = null;
+  // --------------------------
+  // --- Stav komponentu ---
+  // --------------------------
+  isLoading = true; // Indikátor načítania
+  errorMessage = ''; // Správa o chybe
+  customer: CustomersInterface[] = []; // Pole všetkých zákazníkov
+  selectedCustomer: CustomersInterface | null = null; // Aktuálne vybraný zákazník
+  customerForm: FormGroup | null = null; // Reactive form pre zákazníka
 
   columns: TableColumn[] = [
     { key: 'id', label: 'Kód', type: 'number' },
@@ -60,6 +69,9 @@ export class CustomersComponent implements OnInit {
     { key: 'website', label: 'Web', type: 'text' }
   ];
 
+  // --------------------------
+  // --- Konstruktor ---
+  // --------------------------
   constructor(
     private customerService: CustomerService,
     private userService: UserService,
@@ -68,10 +80,18 @@ export class CustomersComponent implements OnInit {
     private filterService: FilterService
   ) { }
 
+  // --------------------------
+  // --- Lifecycle hook ---
+  // --------------------------
   ngOnInit(): void {
     this.loadCustomers();
   }
 
+  // ==========================
+  // === CRUD LOGIKA ==========
+  // ==========================
+
+  /** Načíta všetkých zákazníkov zo servera */
   private loadCustomers() {
     if (!this.userService.isLoggedIn()) {
       this.errorMessage = 'Nie ste prihlásený';
@@ -82,7 +102,7 @@ export class CustomersComponent implements OnInit {
     this.isLoading = true;
     this.customerService.loadAllCustomers().subscribe({
       next: customers => {
-        this.customer = customers.map(c => ({ ...c })); // mapovanie na istotu
+        this.customer = customers.map(c => ({ ...c }));
         this.isLoading = false;
       },
       error: err => {
@@ -93,35 +113,72 @@ export class CustomersComponent implements OnInit {
     });
   }
 
-  createNewCustomer() {
-    this.selectedCustomer = null;
-    this.initForm();
+  /** Uloží zmeny existujúceho alebo nového zákazníka */
+  saveCustomer() {
+    if (!this.customerForm || this.customerForm.invalid) return;
+
+    const formValue = this.customerForm.value;
+    const dirtyPayload: any = {};
+
+    // Zbieranie len zmien
+    Object.keys(this.customerForm.controls).forEach(key => {
+      const control = this.customerForm!.controls[key];
+      if (control.dirty) dirtyPayload[key] = control.value;
+    });
+
+    // Update existujúceho zákazníka
+    if (this.selectedCustomer?.id) {
+      this.customerService.updateCustomer(this.selectedCustomer.id, dirtyPayload).subscribe({
+        next: res => {
+          this.loadCustomers();
+          this.notify.notify('Zákazník bol uložený', 'info');
+          this.customerForm?.markAsPristine();
+        },
+        error: err => console.error(err)
+      });
+    }
+    // Vytvorenie nového zákazníka
+    else {
+      this.customerService.createCustomer(formValue).subscribe({
+        next: res => {
+          this.loadCustomers();
+          this.notify.notify('Nový zákazník bol vytvorený', 'info');
+          this.customerForm?.markAsPristine();
+        },
+        error: err => console.error(err)
+      });
+    }
   }
 
+  /** Zmaže zákazníka zo servera */
+  deleteCustomer(customer: CustomersInterface | null) {
+    if (!customer) return;
+
+    if (!confirm(`Naozaj chcete zmazať zákazníka ${customer.name}?`)) return;
+
+    this.customerService.deletecustomer(customer.id).subscribe({
+      next: () => {
+        this.loadCustomers();
+        if (this.selectedCustomer?.id === customer.id) this.selectedCustomer = null;
+        this.customerForm = null;
+        this.selectedCustomer = null;
+        this.notify.notify('Zákazník bol zmazaný', 'info');
+      },
+      error: err => console.error('Chyba pri mazání zákazníka', err)
+    });
+  }
+
+  // Lokálne odstránenie zo zoznamu (bez servera)
   onDeleteCustomer(customer: CustomersInterface) {
     this.customer = this.customer.filter(c => c.id !== customer.id);
     this.selectedCustomer = null;
   }
 
-  async selectCustomer(customer: CustomersInterface) {
-    console.log('Klikol si na zákazníka:', customer);
+  // ==========================
+  // === UI LOGIKA ============
+  // ==========================
 
-    if (this.customerForm?.dirty) {
-      const ok = await this.notify.confirm('Máte neuložené zmeny. Chcete ich uložiť?');
-
-      if (ok) {
-        await this.saveCustomer();
-      } else {
-        this.notify.notify('Neuložené zmeny boli zahodené', 'warn');
-        this.customerForm.reset(customer);
-      }
-    }
-
-    // nastavenie vybraného zákazníka zo zoznamu, aby sa zvýraznil aj vizuálne
-    this.selectedCustomer = this.customer.find(c => c.id === customer.id) || customer;
-    this.initForm(this.selectedCustomer);
-  }
-
+  /** Inicializácia alebo reset formulára zákazníka */
   initForm(customer?: CustomersInterface) {
     this.customerForm = this.fb.group({
       id: [customer?.id || null],
@@ -143,52 +200,27 @@ export class CustomersComponent implements OnInit {
     });
   }
 
-  saveCustomer() {
-    if (!this.customerForm || this.customerForm.invalid) return;
-
-    const formValue = this.customerForm.value;
-    const dirtyPayload: any = {};
-    Object.keys(this.customerForm.controls).forEach(key => {
-      const control = this.customerForm!.controls[key];
-      if (control.dirty) dirtyPayload[key] = control.value;
-    });
-
-    if (this.selectedCustomer?.id) {
-      this.customerService.updateCustomer(this.selectedCustomer.id, dirtyPayload).subscribe({
-        next: res => {
-          this.loadCustomers();
-          this.notify.notify('Zákazník bol uložený', 'info');
-          this.customerForm?.markAsPristine();
-        },
-        error: err => console.error(err)
-      });
-    } else {
-      this.customerService.createCustomer(formValue).subscribe({
-        next: res => {
-          this.loadCustomers();
-          this.notify.notify('Nový zákazník bol vytvorený', 'info');
-          this.customerForm?.markAsPristine();
-        },
-        error: err => console.error(err)
-      });
-    }
+  /** Príprava formulára pre nového zákazníka */
+  createNewCustomer() {
+    this.selectedCustomer = null;
+    this.initForm();
   }
 
+  /** Výber zákazníka zo zoznamu a kontrola neuložených zmien */
+  async selectCustomer(customer: CustomersInterface) {
+    console.log('Klikol si na zákazníka:', customer);
 
+    if (this.customerForm?.dirty) {
+      const ok = await this.notify.confirm('Máte neuložené zmeny. Chcete ich uložiť?');
+      if (ok) {
+        await this.saveCustomer();
+      } else {
+        this.notify.notify('Neuložené zmeny boli zahodené', 'warn');
+        this.customerForm.reset(customer);
+      }
+    }
 
-  deleteCustomer(customer: CustomersInterface | null) {
-    if (!customer) return;
-    if (!confirm(`Naozaj chcete zmazať zákazníka ${customer.name}?`)) return;
-
-    this.customerService.deletecustomer(customer.id).subscribe({
-      next: () => {
-        this.loadCustomers();
-        if (this.selectedCustomer?.id === customer.id) this.selectedCustomer = null;
-        this.customerForm = null;
-        this.selectedCustomer = null;
-        this.notify.notify('Zákazník bol zmazaný', 'info');
-      },
-      error: err => console.error('Chyba pri mazání zákazníka', err)
-    });
+    this.selectedCustomer = this.customer.find(c => c.id === customer.id) || customer;
+    this.initForm(this.selectedCustomer);
   }
 }

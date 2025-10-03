@@ -1,0 +1,12 @@
+
+<nav class="small-navbar ">
+    <button
+       mat-raised-button
+      *ngFor="let item of menuItems"
+      [ngClass]="item.styleClass"
+      (click)="item.click?.()"
+      class="px-4 py-2 rounded"
+    >
+      {{ item.label }}
+    </button>
+  </nav>

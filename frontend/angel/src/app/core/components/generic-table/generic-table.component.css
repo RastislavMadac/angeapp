@@ -111,3 +111,51 @@ tr.selected {
 .clear-filters-btn:hover {
     background-color: #1565c0;
 }
+
+/* Pending – čaká sa */
+.badge-pending {
+    background-color: #fff3e0;
+    /* svetlo-oranžová */
+    color: #f0ad4e;
+    /* tmavo-oranžový text */
+    font-weight: bold;
+    padding: 4px 8px;
+    border-radius: 4px;
+
+}
+
+/* Processing – spracováva sa */
+.badge-processing {
+    background-color: #e0f7fa;
+    /* svetlo-modrá */
+    color: #5bc0de;
+    /* tmavo-modrý text */
+    font-weight: bold;
+    padding: 4px 8px;
+    border-radius: 4px;
+
+}
+
+/* Completed – dokončená */
+.badge-completed {
+    background-color: #e8f5e9;
+    /* svetlo-zelená */
+    color: #5cb85c;
+    /* tmavo-zelený text */
+    font-weight: bold;
+    padding: 4px 8px;
+    border-radius: 4px;
+
+}
+
+/* Canceled – zrušená */
+.badge-canceled {
+    background-color: #ffebee;
+    /* svetlo-červená */
+    color: #d9534f;
+    /* tmavo-červený text */
+    font-weight: bold;
+    padding: 4px 8px;
+    border-radius: 4px;
+
+}

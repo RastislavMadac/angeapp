@@ -39,13 +39,13 @@
   (select)="selectUser($event)">
 </app-master-layout>
 
-<ng-template #masterTpl>
-  <app-generic-table
-  [columns]="columns"
-  [data]="users"
-  [selectedItem]="selectedUser"
-  (rowClick)="selectUser($event)">
-</app-generic-table>
+<ng-template #masterTpl> 
+  <app-generic-table 
+  [columns]="columns" 
+  [data]="users" 
+  [selectedItem]="selectedUser" 
+  [cellClassMap]="{ status: statusCellClass }"> 
+</app-generic-table> 
 
 </ng-template>
 

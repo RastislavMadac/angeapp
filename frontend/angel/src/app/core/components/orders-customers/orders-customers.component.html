@@ -1,0 +1,26 @@
+<app-navbar
+ [selectedItem]="selectedCustomer"
+></app-navbar>
+
+
+<nav class="small-navbar">
+  <button (click)="confirmSelection()">Pridať respondenta</button>
+  <button (click)="onClose()">Close door</button>
+
+  <app-master-layout
+    [masterTemplateInput]="masterTpl"
+    [items]="customer"
+    [(selectedItem)]="selectedCustomer"
+    (select)="selectCustomer($event)">
+  </app-master-layout>
+
+  <ng-template #masterTpl>
+    <app-generic-table
+      [columns]="columns"
+      [data]="customer"
+      [selectedItem]="selectedCustomer"
+      (rowClick)="selectCustomer($event)">
+    </app-generic-table>
+  </ng-template>
+</nav>
+

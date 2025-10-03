@@ -52,6 +52,11 @@
             routerLinkActive="active">
       Zákaznici
     </button>
+    <button mat-raised-button
+            [routerLink]="['/orders']"
+            routerLinkActive="active">
+      Objednávky
+    </button>
   </div>
 
 
@@ -61,11 +66,19 @@
         <mat-icon>description</mat-icon>
       </button>
     </div>
-  
+   
     <div class="right-buttons red-icon">
       <button mat-icon-button aria-label="Vymazať" [disabled]="!selectedItem"
+      
               (click)="selectedItem && deleteItem.emit(selectedItem)">
         <mat-icon>delete</mat-icon>
+      </button>
+    </div>
+
+    <div class="right-buttons red-icon">
+      <button mat-icon-button aria-label="Vymazať" [disabled]="!selectedItem"
+      [disabled]="!selectedItem" (click)="onDeleteClick()">
+        <mat-icon>delete1</mat-icon>
       </button>
     </div>
     

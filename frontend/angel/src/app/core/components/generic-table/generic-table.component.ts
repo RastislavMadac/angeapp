@@ -22,6 +22,12 @@ export class GenericTableComponent<T extends object> implements OnInit, OnChange
 
   filteredData: T[] = [];
   headers: TableColumn[] = [];
+  //Zviraznenie
+  @Input() cellClassMap: { [key: string]: (value: any) => string } = {};
+
+  @Input() rowClassMap: (row: any) => string = () => ''; // Ponechajte default hodnotu
+
+
 
   // ---------- Vyhľadávanie/filtrovanie ----------
   private filterSub!: Subscription;
@@ -104,5 +110,4 @@ export class GenericTableComponent<T extends object> implements OnInit, OnChange
       )
     );
   }
-
 }
