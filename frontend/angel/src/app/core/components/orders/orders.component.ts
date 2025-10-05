@@ -16,6 +16,7 @@ import { OrderItemInterface } from '../../interface/order-item.interface';
 import { OrderService } from '../../servicies/order.service';
 import { UserService } from '../../servicies/user.service';
 import { NotificationService } from '../../servicies/notification.service';
+import { ButtonsService } from '../../servicies/buttons.service';
 
 @Component({
   selector: 'app-orders',
@@ -53,20 +54,39 @@ export class OrdersComponent implements OnInit {
   }
   selectedOrderItems: OrderItemInterface[] = [];
   private _selectedOrder: OrderInterface | null = null;
-  get selectedOrder(): OrderInterface | null { return this._selectedOrder; }
+
+  get selectedOrder(): OrderInterface | null {
+    return this._selectedOrder;
+  }
+
   set selectedOrder(v: OrderInterface | null) {
     console.group('%c[DEBUG] selectedOrder.setter', 'color: green; font-weight: bold;');
     console.log('old id =', this._selectedOrder?.id, 'new id =', v?.id);
+
     const foundByRef = v ? this._orders.includes(v) : false;
     const foundById = v ? this._orders.some(o => o.id === v.id) : false;
     console.log('in orders by ref:', foundByRef, 'by id:', foundById);
     console.trace();
+
+    // ✅ Bezpečné nastavenie spreadu
+    if (v) {
+      this._selectedOrder = {
+        ...v,
+        customer_id: (v as any).customer_id ?? null
+      };
+    } else {
+      this._selectedOrder = null;
+    }
+
     console.groupEnd();
-    this._selectedOrder = v;
   }
+
+
 
   orderForm: FormGroup | null = null;
   showModal = false;
+
+
 
   productMenu = [
     { label: 'Hlavny Zoznam', styleClass: 'btn-new navigation', click: () => this.closeModal() },
@@ -90,7 +110,8 @@ export class OrdersComponent implements OnInit {
     private fb: FormBuilder,
     private orderService: OrderService,
     private userService: UserService,
-    private notify: NotificationService
+    private notify: NotificationService,
+    private buttonService: ButtonsService
   ) { }
 
   ngOnInit(): void {
@@ -195,24 +216,24 @@ export class OrdersComponent implements OnInit {
     this.orderForm?.markAsPristine();
     console.log('%c[DEBUG] selectOrder complete. form value:', 'color: teal', this.orderForm?.value);
   }
-  onOrderUpdated(updatedOrder: OrderInterface) {
-    console.log("🔄 Order updated v rodičovi:", updatedOrder);
-
-    const index = this.orders.findIndex(o => o.id === updatedOrder.id);
+  onOrderUpdated(order: OrderInterface) {
+    const index = this.orders.findIndex(o => o.id === order.id);
     if (index !== -1) {
-      // vytvoríme novú kópiu poľa = Angular to zachytí
+      // update existujúcej
       this.orders = [
         ...this.orders.slice(0, index),
-        { ...updatedOrder },
+        order,
         ...this.orders.slice(index + 1)
       ];
+    } else {
+      // nová objednávka → pridáme do zoznamu
+      this.orders = [...this.orders, order];
     }
 
-    // ak je modal otvorený, aktualizuj selectedOrder
-    if (this.selectedOrder && this.selectedOrder.id === updatedOrder.id) {
-      this.selectedOrder = { ...updatedOrder };
-    }
+    this.selectedOrder = order; // vyberieme práve uloženú objednávku
   }
+
+
   // --------------------------
   // Uloženie alebo vytvorenie objednávky
   // --------------------------
@@ -245,9 +266,18 @@ export class OrdersComponent implements OnInit {
   }
 
   createNewOrder() {
+    console.log('🟢 Vytváram novú objednávku');
     this.selectedOrder = null;
-    this.initForm();
+    this.selectedOrderItems = [];
+    this.showModal = true;
+
+    // ✅ po otvorení modalu pošli signál cez ButtonsService
+    // setTimeout(() => {
+    //   console.log('📢 Volám this.buttonService.add$.next()');
+    //   this.buttonService.triggerAdd(); // → OrderItemsComponent to zachytí a otvorí produkt modal
+    // }, 200);
   }
+
 
   onDeleteOrder(order: OrderInterface) {
     if (!confirm(`Naozaj chcete zmazať objednávku ${order.order_number}?`)) return;

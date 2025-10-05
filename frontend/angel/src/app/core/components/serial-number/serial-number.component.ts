@@ -1,5 +1,5 @@
 import {
-  Component, OnInit, ViewChild
+  Component, OnInit, ChangeDetectorRef
 } from '@angular/core';
 import { UserService } from '../../servicies/user.service';
 import { FilterService } from '../../servicies/filter.service';
@@ -41,7 +41,8 @@ export class SerialNumberComponent implements OnInit {
     private productSerialNumberService: ProductSerialNumberService,
     private productService: ProductService,
     private userService: UserService,
-    private notify: NotificationService
+    private notify: NotificationService,
+    private cdr: ChangeDetectorRef
   ) { }
 
   ngOnInit(): void {
@@ -164,6 +165,7 @@ export class SerialNumberComponent implements OnInit {
 
     this.selectedProductSerialNumber = productSerialNumber;
     this.initForm(productSerialNumber);
+    this.cdr.detectChanges();// <--- PRIDAŤ ChangeDetectorRef
   }
 
   saveProductSerialNumber() {

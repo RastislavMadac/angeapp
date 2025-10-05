@@ -44,7 +44,7 @@
   [columns]="columns" 
   [data]="users" 
   [selectedItem]="selectedUser" 
-  [cellClassMap]="{ status: statusCellClass }"> 
+  (rowClick)="selectUser($event)" >
 </app-generic-table> 
 
 </ng-template>

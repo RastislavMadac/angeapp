@@ -3,9 +3,9 @@ import { FormArray, FormBuilder, FormGroup, Validators, ReactiveFormsModule } fr
 import { CommonModule } from '@angular/common';
 import { OrderInterface } from '../../interface/order.interface';
 import { OrderItemInterface } from '../../interface/order-item.interface';
-
+import { CustomerService } from '../../servicies/customers.service';
 import { OrderService } from '../../servicies/order.service';
-import { debounceTime, distinctUntilChanged, switchMap, catchError, of } from 'rxjs';
+import { debounceTime, distinctUntilChanged, switchMap, catchError, of, Subscription, Observable, map } from 'rxjs';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatIconModule } from '@angular/material/icon';
@@ -13,7 +13,10 @@ import { MatButtonModule } from '@angular/material/button';
 import { OrdersCustomersComponent } from '../orders-customers/orders-customers.component';
 import { CustomersInterface } from '../../interface/customer.interface';
 import { NavbarComponent } from '../navbar/navbar.component';
-import { DeleteService } from '../../servicies/delete.service';
+import { ButtonsService } from '../../servicies/buttons.service';
+import { OrdersProductComponent } from '../orders-product/orders-product.component';
+import { Product } from '../../interface/product.interface';
+
 
 @Component({
   selector: 'app-order-items',
@@ -25,7 +28,8 @@ import { DeleteService } from '../../servicies/delete.service';
     MatIconModule,
     MatButtonModule,
     OrdersCustomersComponent,
-    NavbarComponent],
+    NavbarComponent,
+    OrdersProductComponent],
   templateUrl: './order-items.component.html',
   styleUrls: ['./order-items.component.css']
 })
@@ -35,15 +39,23 @@ export class OrderItemsComponent implements OnInit, OnChanges {
   @Input() items: OrderItemInterface[] = [];                // 🔹 Položky objednávky (riadky s produktmi)
   @Output() updated = new EventEmitter<OrderInterface>();   // 🔹 Event, ktorým posielame rodičovi aktualizovanú objednávku
   orderForm!: FormGroup;                                    // 🔹 Reactive Form pre základné údaje objednávky
-  itemsForm!: FormGroup;                                    // 🔹 Reactive Form pre položky objednávky (obsahuje FormArray)
-  showModal = false;
+  itemsForm!: FormGroup;
+  // 🔹 
   constructor(private fb: FormBuilder,
     private productService: OrderService,
-    private deleteService: DeleteService) { } // 🔹 Vstrekovanie FormBuildera a OrderService
+    private buttonService: ButtonsService,
+    private customerService: CustomerService) { }
+
+  allCustomers: { id: number; name: string; }[] = [];
   selectedCustomer: CustomersInterface | null = null;
+  selectedProduct: Product | null = null;
   selectedItem: any = null;
   selectedItemIndex: number | null = null;
+  @Output() addProductClicked = new EventEmitter<void>();
+  private subs = new Subscription();
 
+  showModal = false;
+  showModalProduct = false;
 
   selectItem(item: any, index: number) {
     this.selectedItem = item;
@@ -51,6 +63,61 @@ export class OrderItemsComponent implements OnInit, OnChanges {
     console.log("this.selectedItem", this.selectedItem);
     console.log("this.selectedItemIndex", this.selectedItemIndex);
   }
+
+
+  // pri výbere zákazníka z modalu
+  onProductSelected(product: Product) {
+    console.log('✅ Vybraný produkt:', product);
+    this.addNewItem(product);
+    this.closeModalProduct();
+  }
+  addNewItem(product: Product): void {
+    if (!product) return;
+
+    // pretypovanie price_no_vat na číslo
+    const price = typeof product.price_no_vat === 'string'
+      ? parseFloat(product.price_no_vat)
+      : product.price_no_vat;
+
+    // Skontroluj, či produkt už nie je pridaný
+    const exists = this.itemsArray.value.some(
+      (i: any) => i.product_db_id === product.id
+    );
+    if (exists) {
+      alert(`Produkt "${product.product_name}" je už pridaný.`);
+      return;
+    }
+
+    // Vytvor nový riadok vo formulári
+    const newItem = this.fb.group({
+      product_db_id: [product.id],
+      product_code: [product.product_id],
+      product: [product.product_name],
+      quantity: [1],
+      price: [price],
+      total_price: [1 * price]   // 1 * price
+    });
+
+    this.itemsArray.push(newItem);
+
+    // automatický prepočet ceny
+    newItem.valueChanges.subscribe(() => {
+      this.updateRowTotal(newItem);
+      this.updateTotalPrice();
+    });
+
+    this.updateTotalPrice();
+  }
+
+  // Prepočet ceny pre jeden riadok
+  updateRowTotal(itemGroup: FormGroup): void {
+    const quantity = itemGroup.get('quantity')?.value || 0;
+    const price = itemGroup.get('price')?.value || 0;
+    const total = quantity * price;
+    itemGroup.patchValue({ total_price: total }, { emitEvent: false });
+  }
+
+
 
 
   // pri výbere zákazníka z modalu
@@ -66,22 +133,45 @@ export class OrderItemsComponent implements OnInit, OnChanges {
     });
     console.log("customer_id vo forme =", this.orderForm.value.customer_id);
   }
-
+  openModalProduct() { this.showModalProduct = true; console.log('Modal showModalProduct =', this.showModalProduct); }
+  closeModalProduct() { this.showModalProduct = false }
 
   //🔹 Modal Okno
   openModal() { this.showModal = true; console.log('Modal showModal =', this.showModal); }
   closeModal() { this.showModal = false }
 
 
+  ngOnDestroy(): void {
+    this.subs.unsubscribe();
+    console.log("🧹 Odhlásený všetky buttonService subscribes");
+  }
+
   // 🔹 Spustí sa pri prvom načítaní komponentu
   ngOnInit(): void {
-    document.body.classList.add('modal-open'); // pridáme CSS triedu na body (aby sa zablokoval scroll pozadia)
-    this.loadDetails();                        // vytvoríme formuláre podľa aktuálnej objednávky
-    this.setupLiveProductLoading();            // nastavíme live vyhľadávanie produktov podľa kódu
-    // Predplatíme sa na event z Navbar
-    this.deleteService.delete$.subscribe(() => this.deleteSelectedItem());
+    document.body.classList.add('modal-open');
+    this.loadDetails();
+    this.setupLiveProductLoading();
+
+    // 🔹 DELETE tlačidlo
+    this.buttonService.delete$.subscribe(() => {
+      console.log("🗑️ DELETE z buttonService zachytené");
+      this.deleteSelectedItem();
+    });
+
+    // 🔹 SAVE tlačidlo
+    this.buttonService.save$.subscribe(() => {
+      console.log("💾 SAVE z buttonService zachytené");
+      this.saveItems();
+    });
+
+    // 🔹 ADD tlačidlo
+    this.buttonService.add$.subscribe(() => {
+      console.log("➕ ADD z buttonService zachytené");
+      this.openModalProduct(); // odstrániť podmienku if
+    });
 
   }
+
 
   // 🔹 Reaguje na zmeny Inputov (napr. keď items prídu oneskorene)
   ngOnChanges(changes: SimpleChanges): void {
@@ -91,40 +181,53 @@ export class OrderItemsComponent implements OnInit, OnChanges {
     }
   }
 
-  // 🔹 Vytvorenie formulárov pre objednávku a položky
+
+
+
   loadDetails() {
     // FormGroup pre základné údaje objednávky
     this.orderForm = this.fb.group({
-      order_number: [this.order?.order_number ?? '', Validators.required], // číslo objednávky (povinné)
-      customer_id: [this.order?.customer_id ?? null, Validators.required],         // zákazník (povinné)
-      customer_name: [this.order?.customer ?? '', Validators.required],         // zákazník (povinné)
-      status: [this.order?.status ?? 'pending'],                           // stav objednávky (default = pending)
-      total_price: [this.order?.total_price ?? 0, Validators.min(0)]       // celková cena (nesmie byť < 0)
+      order_number: [this.order?.order_number ?? '', Validators.required],
+      customer_id: [null, Validators.required],
+      customer_name: [this.order?.customer ?? '', Validators.required],
+      status: [(this.order?.status ?? 'pending').toLowerCase()],
+
+      total_price: [this.order?.total_price ?? 0, Validators.min(0)]
     });
+    // 🔹 Ak máš informáciu o customer_id z iného miesta, nastav ho
+    // Napr. ak používaš selectedCustomer
+    if (this.selectedCustomer) {
+      this.orderForm.patchValue({ customer_id: this.selectedCustomer.id });
+    }
+
 
     // FormArray pre položky objednávky
     this.itemsForm = this.fb.group({
       items: this.fb.array(
-        this.items.map(item =>
+        (this.items ?? []).map(item =>
           this.fb.group({
-            order_item_id: [item.id],                    // ID riadku objednávky (DB ID položky)
-            product_db_id: [item.product_id],            // interné DB ID produktu
-            product_code: [item.product_code || ''],     // kód produktu (používa sa na vyhľadanie)
-            product: [item.product || '', Validators.required], // názov produktu (povinný)
-            quantity: [item.quantity, [Validators.required, Validators.min(1)]], // množstvo (min. 1)
-            price: [item.price, [Validators.required, Validators.min(0)]]        // cena (min. 0)
+            order_item_id: [item.id || null],
+            product_db_id: [item.product_id || null],
+            product_code: [item.product_code || ''],
+            product: [item.product || '', Validators.required],
+            quantity: [item.quantity || 1, [Validators.required, Validators.min(1)]],
+            price: [item.price || 0, [Validators.required, Validators.min(0)]],
+            total_price: [(item.quantity || 1) * (item.price || 0)]
           })
         )
       )
     });
+
     // 🔹 Live update celkovej ceny pri zmene množstva alebo ceny
     this.itemsArray.controls.forEach(itemCtrl => {
       itemCtrl.get('quantity')?.valueChanges.subscribe(() => this.updateTotalPrice());
       itemCtrl.get('price')?.valueChanges.subscribe(() => this.updateTotalPrice());
     });
+
     // spočítame total_price aj po načítaní
     this.updateTotalPrice();
   }
+
 
   // 🔹 Getter na FormArray položiek (zjednoduší prístup k itemsForm.items)
   get itemsArray(): FormArray {
@@ -133,59 +236,98 @@ export class OrderItemsComponent implements OnInit, OnChanges {
 
   // 🔹 Uloženie zmien objednávky a položiek (PATCH request)
 
+
+  getCustomerId(): Observable<number | null> {
+    if (this.orderForm.value.customer_id) {
+      console.log("🔹 Používam customer_id z formulára:", this.orderForm.value.customer_id);
+      return of(this.orderForm.value.customer_id);
+    } else if (this.order?.customer) {
+      console.log("🔹 Hľadám customer_id pre meno zákazníka:", this.order.customer);
+      return this.customerService.loadAllCustomers().pipe(
+        map(customers => {
+          console.log("🔹 Načítaní všetci zákazníci:", customers);
+
+          // vytvoríme Mapu: key = meno zákazníka, value = id
+          const customerMap = new Map(customers.map(c => [c.name, c.id]));
+
+          // kontrola, či sa meno order.customer nachádza v mape
+          const id = Array.from(customerMap.keys()).find(name =>
+            this.order?.customer?.includes(name)
+          );
+
+          const customerId = id ? customerMap.get(id) ?? null : null;
+
+          console.log("🔹 Nájde sa customerObj:", id);
+          console.log("🔹 Použité customer_id:", customerId);
+
+          return customerId;
+        })
+
+      );
+    } else {
+      console.log("⚠️ Nie je k dispozícii ani order.customer ani orderForm.value.customer_id");
+      return of(null);
+    }
+  }
+
+
+
   // PATCH objednávky
   saveItems(): void {
-    console.log("SAVEITEMS SPUSTENA");
+    console.log("🟡 SAVEITEMS SPUSTENA");
     console.log('Order ID:', this.order?.id);
 
-    // Debug pre formy
-    console.log("orderForm.valid =", this.orderForm.valid, "orderForm.value =", this.orderForm.value);
-    console.log("itemsForm.valid =", this.itemsForm.valid, "itemsForm.value =", this.itemsForm.value);
-
-    // Kontrola, či kontrola customer_id vôbec existuje
-    const customerIdControl = this.orderForm.get('customer_id');
-    console.log("customer_id control exists?", !!customerIdControl);
-    console.log("customer_id value =", customerIdControl?.value, "type =", typeof customerIdControl?.value);
-
-    // fallback: ak je customer_id null/"" → vezmi pôvodný z this.order
-    const safeCustomerId = this.orderForm.value.customer_id ?? this.order?.customer_id;
-
-    // payload pre PATCH
-    const updatedOrder = {
-      status: this.orderForm.value.status,
-      customer_id: safeCustomerId,
-      total_price: this.orderForm.value.total_price
-    };
-
-    // premapujeme položky
-    const updatedItems = this.itemsForm.value.items.map((item: any) => ({
-      id: item.order_item_id,
-      product_id: item.product_db_id,
-      quantity: item.quantity,
-      price: item.price
-    }));
-
-    const payload = {
-      ...updatedOrder,
-      items: updatedItems
-    };
-
-    console.log("PATCH payload (to be sent):", payload);
-
-    if (this.order?.id) {
-      this.productService.updateOrder(this.order.id, payload).subscribe({
-        next: (res) => {
-          console.log('✅ Objednávka aktualizovaná:', res);
-          this.updated.emit(res);
-          this.itemsForm.markAsPristine();
-          this.orderForm.markAsPristine();
-          this.close.emit();
-        },
-        error: (err) => {
-          console.error('❌ Chyba pri ukladaní objednávky:', err);
-        }
-      });
+    if (!this.orderForm || !this.itemsForm) {
+      console.warn("❌ Formuláre nie sú inicializované, ukladanie zastavené.");
+      return;
     }
+    this.getCustomerId().subscribe(customerId => {
+      if (!customerId) {
+        console.warn("❌ Nebolo možné určiť customer_id, ukladanie zastavené.");
+        return;
+      }
+      // Poskladanie payloadu pre PATCH/POST
+      const payload = {
+        status: this.orderForm.value.status ?? 'pending',
+        customer_id: customerId,
+        total_price: this.orderForm.value.total_price ?? 0,
+        items: this.itemsArray.controls.map(ctrl => ({
+          id: ctrl.get('order_item_id')?.value || null,
+          product_id: ctrl.get('product_db_id')?.value,
+          quantity: ctrl.get('quantity')?.value,
+          price: ctrl.get('price')?.value
+        }))
+      };
+
+      console.log("📦 Payload pripravený na odoslanie:", payload);
+
+      if (this.order?.id) {
+        // ✅ PATCH – update existujúcej objednávky
+        this.productService.updateOrder(this.order.id, payload).subscribe({
+          next: (res) => {
+            console.log("✅ Objednávka úspešne aktualizovaná (PATCH):", res);
+            this.updated.emit(res);  // späť do rodiča
+            this.orderForm.markAsPristine();
+            this.itemsForm.markAsPristine();
+            this.close.emit();
+          },
+          error: (err) => console.error("❌ Chyba pri PATCH objednávky:", err)
+        });
+      } else {
+        // ⚡ POST – nová objednávka
+        console.log("⚡ Vytvárame novú objednávku (POST)");
+        this.productService.createOrder(payload).subscribe({
+          next: (res) => {
+            console.log("✅ Objednávka úspešne vytvorená (POST):", res);
+            this.updated.emit(res); // späť do rodiča → pridáme do zoznamu
+            this.orderForm.markAsPristine();
+            this.itemsForm.markAsPristine();
+            this.close.emit();
+          },
+          error: (err) => console.error("❌ Chyba pri POST objednávky:", err)
+        });
+      }
+    });
   }
 
 
@@ -236,14 +378,19 @@ export class OrderItemsComponent implements OnInit, OnChanges {
     });
   }
 
-  updateTotalPrice() {
-    const total = this.itemsArray.controls.reduce((sum, itemCtrl) => {
-      const quantity = itemCtrl.get('quantity')?.value || 0;
-      const price = itemCtrl.get('price')?.value || 0;
-      return sum + quantity * price;
+
+  // Prepočet celkovej ceny objednávky
+  updateTotalPrice(): void {
+    const total = this.itemsArray.controls.reduce((sum, ctrl) => {
+      const rowTotal = ctrl.get('quantity')?.value * ctrl.get('price')?.value || 0;
+      return sum + rowTotal;
     }, 0);
+
+    console.log(`💰 Celková cena objednávky: ${total} €`);
     this.orderForm.patchValue({ total_price: total }, { emitEvent: false });
   }
+
+
 
   deleteSelectedItem() {
     if (this.selectedItemIndex !== null) {
@@ -251,7 +398,10 @@ export class OrderItemsComponent implements OnInit, OnChanges {
       this.selectedItem = null;
       this.selectedItemIndex = null;
     }
+    // 🔹 prepočet total_price po odstránení položky
+    this.updateTotalPrice();
   }
 
 
 }
+

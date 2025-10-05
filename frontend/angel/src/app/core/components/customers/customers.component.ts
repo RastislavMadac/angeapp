@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule } from '@angular/forms';
@@ -77,7 +77,8 @@ export class CustomersComponent implements OnInit {
     private userService: UserService,
     private fb: FormBuilder,
     private notify: NotificationService,
-    private filterService: FilterService
+    private filterService: FilterService,
+    private cdr: ChangeDetectorRef
   ) { }
 
   // --------------------------
@@ -222,5 +223,6 @@ export class CustomersComponent implements OnInit {
 
     this.selectedCustomer = this.customer.find(c => c.id === customer.id) || customer;
     this.initForm(this.selectedCustomer);
+    this.cdr.detectChanges();// <--- PRIDAŤ ChangeDetectorRef
   }
 }

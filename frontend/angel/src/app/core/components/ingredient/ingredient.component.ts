@@ -1,4 +1,4 @@
-import { Component, OnInit, Input } from '@angular/core';
+import { Component, OnInit, Input, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { MasterLayoutComponent } from '../master-layout/master-layout.component';
@@ -56,7 +56,8 @@ export class ProductIngredientComponent implements OnInit {
     private productIngredientsService: ProductIngredientService,
     private productService: ProductService,
     private userService: UserService,
-    private notify: NotificationService
+    private notify: NotificationService,
+    private cdr: ChangeDetectorRef
   ) {
     this.ingredientForm = this.fb.group({
       ingredient_id: [null, Validators.required],
@@ -85,6 +86,7 @@ export class ProductIngredientComponent implements OnInit {
 
         if (this.product.length > 0) {
           this.handleRowClick(this.product[0]);
+
         }
       },
       error: err => {
@@ -104,6 +106,7 @@ export class ProductIngredientComponent implements OnInit {
   handleRowClick(product: Product) {
     this.selectedProduct = product;
     this.loadIngredients(product.id);
+
   }
 
   loadIngredients(productId: number) {

@@ -75,10 +75,23 @@
       </button>
     </div>
 
-    <div class="right-buttons red-icon">
+    <div class="right-buttons blue-icon">
       <button mat-icon-button aria-label="Vymazať" [disabled]="!selectedItem"
       [disabled]="!selectedItem" (click)="onDeleteClick()">
         <mat-icon>delete1</mat-icon>
+      </button>
+    </div>
+
+    <div class="right-buttons blue-icon">
+      <button mat-icon-button aria-label="Uložiť" [disabled]="!selectedItem"
+      [disabled]="!selectedItem" (click)="onSaveClick()">
+        <mat-icon>save</mat-icon>
+      </button>
+    </div>
+    <div class="right-buttons blue-icon">
+      <button mat-icon-button aria-label="Pridat" [disabled]="!selectedItem"
+      [disabled]="!selectedItem" (click)="onAddClick()">
+        <mat-icon>add</mat-icon>
       </button>
     </div>
     

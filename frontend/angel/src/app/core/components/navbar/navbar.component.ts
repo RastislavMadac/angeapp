@@ -10,7 +10,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { FormsModule } from '@angular/forms';
 import { FilterService } from '../../servicies/filter.service';
 import { Observable } from 'rxjs';
-import { DeleteService } from '../../servicies/delete.service';
+import { ButtonsService } from '../../servicies/buttons.service';
 
 @Component({
   selector: 'app-navbar',
@@ -27,13 +27,13 @@ export class NavbarComponent<T = any> {
   @Output() create = new EventEmitter<void>();
   @Output() edit = new EventEmitter<T>();
 
-  logoUrl = 'letter-a.png';
+  logoUrl = '/assets/letter-a.png';
 
   constructor(
     private userService: UserService,
     private router: Router,
     private filterService: FilterService,
-    private deleteService: DeleteService
+    private buttonService: ButtonsService
   ) {
     this.filters$ = this.filterService.filters$; // vyhľadávanie
   }
@@ -46,7 +46,14 @@ export class NavbarComponent<T = any> {
 
 
   onDeleteClick() {
-    this.deleteService.triggerDelete();
+    this.buttonService.triggerDelete();
+  }
+
+  onSaveClick() {
+    this.buttonService.triggerSave();
+  }
+  onAddClick() {
+    this.buttonService.triggerAdd();
   }
 
   enterPressed() {

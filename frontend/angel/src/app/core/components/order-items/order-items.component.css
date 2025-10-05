@@ -8,6 +8,15 @@ app-orders-customers {
     z-index: 1000;
 }
 
+app-orders-product {
+    position: fixed;
+    background: white;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 1000;
+}
 
 .modal-overlay {
     position: fixed;
@@ -15,11 +24,28 @@ app-orders-customers {
     left: 0;
     width: 100vw;
     height: 50vh;
-    background: red;
+    background: #b2cbf4;
     margin: 10px -6px 0px 10px;
     backdrop-filter: blur(5px);
     /* rozmazanie pozadia */
     z-index: 999;
     /* pod modal content */
 
+}
+
+tr.selected {
+    background-color: blue;
+    color: aliceblue
+}
+
+tr.selected input {
+    background-color: #007bff33;
+    /* svetlejšie modré pozadie */
+    border-color: #007bff;
+    color: white;
+    /* text čierny kvôli kontrastu */
+}
+
+app-navbar {
+    display: none;
 }

@@ -1,5 +1,5 @@
 import {
-  Component, OnInit
+  Component, OnInit, ChangeDetectorRef
 } from '@angular/core';
 import { UserService } from '../../servicies/user.service';
 import { FilterService } from '../../servicies/filter.service';
@@ -41,30 +41,15 @@ export class UsersComponent implements OnInit {
     { key: 'is_active', label: 'Aktívny', type: 'boolean', align: 'center' },
     { key: 'created_at', label: 'Vytvorený', type: 'date' }
   ];
-  statusCellClass = (status: string) => {
 
-    switch (status) {
-
-      case 'pending': return 'badge-pending';
-
-      case 'processing': return 'badge-processing';
-
-      case 'completed': return 'badge-completed';
-
-      case 'canceled': return 'badge-canceled';
-
-      default: return '';
-
-    }
-
-  };
 
 
   constructor(
     private userService: UserService,
     private fb: FormBuilder,
     private notify: NotificationService,
-    private filterService: FilterService) { }
+    private filterService: FilterService,
+    private cdr: ChangeDetectorRef) { }
 
   ngOnInit(): void {
     this.loadUsers();
@@ -135,10 +120,12 @@ export class UsersComponent implements OnInit {
         this.notify.notify('Neuložené zmeny boli zahodené', 'warn'); // warning
         this.userForm.reset(user); // reset na nový user
       }
+
     }
 
     this.selectedUser = user;
     this.initForm(user);
+    this.cdr.detectChanges();// <--- PRIDAŤ ChangeDetectorRef
   }
 
 

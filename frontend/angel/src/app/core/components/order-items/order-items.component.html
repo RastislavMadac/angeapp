@@ -1,8 +1,5 @@
-<app-navbar 
-   [selectedItem]="selectedItem" 
->
-</app-navbar>
 
+<app-navbar></app-navbar>
 
 <app-orders-customers
 *ngIf="showModal"
@@ -10,8 +7,15 @@
 (customerSelected)="onCustomerSelected($event)"
 ></app-orders-customers>
 
+<app-orders-product
+*ngIf="showModalProduct"
+(closeDoor)="closeModalProduct()"
+(productSelected)="onProductSelected($event)">
+</app-orders-product>
 
 <div class="modal-overlay">
+ 
+
   <!-- EDIT objednávky -->
   <form [formGroup]="orderForm" class="order-detail-form">
     <mat-form-field class="example-full-width">
@@ -100,6 +104,7 @@
       
     </table>
 
-    <button (click)="saveItems()" type="submit" mat-button color="primary">Uložiť zmeny</button>
+ 
+  
   </form>
 </div>

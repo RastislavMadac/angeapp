@@ -1,5 +1,5 @@
 import {
-  Component, OnInit
+  Component, OnInit, ChangeDetectorRef
 } from '@angular/core';
 import { UserService } from '../../servicies/user.service';
 import { FilterService } from '../../servicies/filter.service';
@@ -48,7 +48,8 @@ export class ProductComponent implements OnInit {
     private userService: UserService,
     private fb: FormBuilder,
     private notify: NotificationService,
-    private filterService: FilterService) { }
+    private filterService: FilterService,
+    private cdr: ChangeDetectorRef) { }
 
   ngOnInit(): void {
     this.loadLookups().subscribe({
@@ -200,6 +201,7 @@ export class ProductComponent implements OnInit {
 
     this.selectedProduct = product;
     this.initForm(product);
+    this.cdr.detectChanges();
   }
 
 

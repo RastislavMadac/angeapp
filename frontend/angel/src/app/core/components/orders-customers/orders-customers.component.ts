@@ -1,4 +1,4 @@
-import { Component, OnInit, Output, EventEmitter } from '@angular/core';
+import { Component, OnInit, Output, EventEmitter, ChangeDetectorRef } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule } from '@angular/forms';
@@ -51,7 +51,7 @@ export class OrdersCustomersComponent implements OnInit {
   isLoading = true; // Indikátor načítania
   errorMessage = ''; // Správa o chybe
   customer: CustomersInterface[] = []; // Pole všetkých
-  selectedCustomer: CustomersInterface | null = null; // Aktuálne vybraný zákazník
+  selectedCustomer!: CustomersInterface;
   customerForm: FormGroup | null = null; // Reactive form pre zákazníka
   columns: TableColumn[] = [
     { key: 'id', label: 'Kód', type: 'number' },
@@ -80,7 +80,8 @@ export class OrdersCustomersComponent implements OnInit {
     private userService: UserService,
     private fb: FormBuilder,
     private notify: NotificationService,
-    private filterService: FilterService
+    private filterService: FilterService,
+    private cdr: ChangeDetectorRef
   ) { }
 
   // --------------------------
@@ -119,11 +120,11 @@ export class OrdersCustomersComponent implements OnInit {
   }
   /** Výber zákazníka zo zoznamu a kontrola neuložených zmien */
 
-
-
   selectCustomer(customer: CustomersInterface) {
     console.log('Klikol si na zákazníka:', customer);
     this.selectedCustomer = customer;  // zatiaľ si ho len uložíme lokálne
+    this.cdr.detectChanges();// <--- PRIDAŤ ChangeDetectorRef
+
   }
 
   confirmSelection() {
