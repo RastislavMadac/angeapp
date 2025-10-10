@@ -176,7 +176,10 @@ export class ProductComponent implements OnInit {
       created_by: [product?.created_by || null],
       created_at: [product?.created_at || ''],
       updated_at: [product?.updated_at || ''],
-      updated_by: [product?.updated_by || null]
+      updated_by: [product?.updated_by || null],
+      tax_rate: [product?.tax_rate || null],
+      minimum_on_stock: [product?.minimum_on_stock ?? null]
+
     });
   }
 
@@ -241,6 +244,8 @@ export class ProductComponent implements OnInit {
       if (formValue.total_quantity !== undefined) payload.total_quantity = formValue.total_quantity;
       if (formValue.reserved_quantity !== undefined) payload.reserved_quantity = formValue.reserved_quantity;
       if (formValue.free_quantity !== undefined) payload.free_quantity = formValue.free_quantity;
+      if (formValue.tax_rate) payload.tax_rate = formValue.tax_rate;
+      if (formValue.minimum_on_stock !== undefined) payload.minimum_on_stock = formValue.minimum_on_stock;
 
       this.productService.updateProduct(this.selectedProduct.id, payload).subscribe({
         next: res => {

@@ -117,6 +117,7 @@ export class OrdersComponent implements OnInit {
   ngOnInit(): void {
     console.log('%c[DEBUG] OrdersComponent ngOnInit', 'color: teal');
     this.loadOrders();
+    this.buttonService.add$.subscribe(() => this.createNewOrder());
   }
 
   // --------------------------
@@ -267,16 +268,26 @@ export class OrdersComponent implements OnInit {
 
   createNewOrder() {
     console.log('🟢 Vytváram novú objednávku');
+
+    // ✅ Vytvoríme prázdnu objednávku
     this.selectedOrder = null;
     this.selectedOrderItems = [];
+
+    // ✅ Inicializuj nový formulár (prázdne hodnoty)
+    this.initForm({
+      order_number: '',
+      customer: '',
+      total_price: 0,
+      status: 'pending'
+    } as OrderInterface);
+
+    // ✅ otvor modal (ak chceš najprv formulár, nie rovno položky)
     this.showModal = true;
 
-    // ✅ po otvorení modalu pošli signál cez ButtonsService
-    // setTimeout(() => {
-    //   console.log('📢 Volám this.buttonService.add$.next()');
-    //   this.buttonService.triggerAdd(); // → OrderItemsComponent to zachytí a otvorí produkt modal
-    // }, 200);
+    // Ak chceš rovno otvoriť modal položiek, nechaj true:
+    // this.showModal = true;
   }
+
 
 
   onDeleteOrder(order: OrderInterface) {

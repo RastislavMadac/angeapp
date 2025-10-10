@@ -5,7 +5,7 @@ import { OrderInterface } from '../../interface/order.interface';
 import { OrderItemInterface } from '../../interface/order-item.interface';
 import { CustomerService } from '../../servicies/customers.service';
 import { OrderService } from '../../servicies/order.service';
-import { debounceTime, distinctUntilChanged, switchMap, catchError, of, Subscription, Observable, map } from 'rxjs';
+import { debounceTime, distinctUntilChanged, switchMap, catchError, of, Subscription, Observable, map, take } from 'rxjs';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatIconModule } from '@angular/material/icon';
@@ -281,54 +281,48 @@ export class OrderItemsComponent implements OnInit, OnChanges {
       console.warn("❌ Formuláre nie sú inicializované, ukladanie zastavené.");
       return;
     }
-    this.getCustomerId().subscribe(customerId => {
+
+    this.getCustomerId().pipe(take(1)).subscribe(customerId => {
       if (!customerId) {
         console.warn("❌ Nebolo možné určiť customer_id, ukladanie zastavené.");
         return;
       }
-      // Poskladanie payloadu pre PATCH/POST
+
+      const itemsPayload = this.itemsArray.controls.map(ctrl => ({
+        id: ctrl.get('order_item_id')?.value || null,
+        product_id: ctrl.get('product_db_id')?.value,
+        quantity: Number(ctrl.get('quantity')?.value) || 0,
+        price: Number(ctrl.get('price')?.value) || 0
+      }));
+
+      const totalPrice = itemsPayload.reduce((sum, i) => sum + i.quantity * i.price, 0);
+
       const payload = {
         status: this.orderForm.value.status ?? 'pending',
         customer_id: customerId,
-        total_price: this.orderForm.value.total_price ?? 0,
-        items: this.itemsArray.controls.map(ctrl => ({
-          id: ctrl.get('order_item_id')?.value || null,
-          product_id: ctrl.get('product_db_id')?.value,
-          quantity: ctrl.get('quantity')?.value,
-          price: ctrl.get('price')?.value
-        }))
+        total_price: totalPrice,
+        items: itemsPayload
       };
 
       console.log("📦 Payload pripravený na odoslanie:", payload);
 
-      if (this.order?.id) {
-        // ✅ PATCH – update existujúcej objednávky
-        this.productService.updateOrder(this.order.id, payload).subscribe({
-          next: (res) => {
-            console.log("✅ Objednávka úspešne aktualizovaná (PATCH):", res);
-            this.updated.emit(res);  // späť do rodiča
-            this.orderForm.markAsPristine();
-            this.itemsForm.markAsPristine();
-            this.close.emit();
-          },
-          error: (err) => console.error("❌ Chyba pri PATCH objednávky:", err)
-        });
-      } else {
-        // ⚡ POST – nová objednávka
-        console.log("⚡ Vytvárame novú objednávku (POST)");
-        this.productService.createOrder(payload).subscribe({
-          next: (res) => {
-            console.log("✅ Objednávka úspešne vytvorená (POST):", res);
-            this.updated.emit(res); // späť do rodiča → pridáme do zoznamu
-            this.orderForm.markAsPristine();
-            this.itemsForm.markAsPristine();
-            this.close.emit();
-          },
-          error: (err) => console.error("❌ Chyba pri POST objednávky:", err)
-        });
-      }
+      const request$ = this.order?.id
+        ? this.productService.updateOrder(this.order.id, payload)
+        : this.productService.createOrder(payload);
+
+      request$.pipe(take(1)).subscribe({
+        next: (res) => {
+          console.log("✅ Objednávka uložená:", res);
+          this.updated.emit(res);
+          this.orderForm.markAsPristine();
+          this.itemsForm.markAsPristine();
+          this.close.emit();
+        },
+        error: (err) => console.error("❌ Chyba pri uložení objednávky:", err)
+      });
     });
   }
+
 
 
   // 🔹 Zavretie modalu (emitne close event)

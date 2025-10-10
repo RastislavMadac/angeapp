@@ -40,4 +40,6 @@ export interface Product {
     created_at: string;   // ISO dátum
     updated_at: string;
     updated_by: number;
+    tax_rate: number;
+    minimum_on_stock: number
 }
