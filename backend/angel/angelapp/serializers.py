@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
-from .models import User,Product, ProductType, Category, Unit,ProductInstance,ProductIngredient, Company,Order,OrderItem
+from .models import User,Product, ProductType, Category, Unit,ProductInstance,ProductIngredient, Company,Order,OrderItem,StockReceipt,ProductionPlanItem,ProductionPlan,ProductionCard
 from rest_framework.authtoken.models import Token
 import re
 
@@ -34,7 +34,7 @@ class UserSerializer(serializers.ModelSerializer):
         user.token = token.key  # priradíme pre spätnú odpoveď
         return user
     
-# PRODUCTS
+
  
 # -----------------------
 # ProductType
@@ -70,12 +70,11 @@ class ProductSerializer(serializers.ModelSerializer):
     category_name = serializers.SerializerMethodField()
     unit_name = serializers.SerializerMethodField()
     product_type_name = serializers.SerializerMethodField()
+    ingredients = serializers.SerializerMethodField()
 
     category = serializers.PrimaryKeyRelatedField(queryset=Category.objects.all())
     unit = serializers.PrimaryKeyRelatedField(queryset=Unit.objects.all())
     product_type = serializers.PrimaryKeyRelatedField(queryset=ProductType.objects.all())
-
-    ingredients = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
@@ -84,7 +83,7 @@ class ProductSerializer(serializers.ModelSerializer):
             'unit', 'unit_name', 'product_type', 'product_type_name',
             'is_serialized', 'product_name', 'description', 'ingredients',
             'weight_item', 'internet', 'ean_code', 'qr_code', 'price_no_vat',
-            'total_quantity', 'reserved_quantity', 'free_quantity',
+            'total_quantity', 'reserved_quantity', 'free_quantity','minimum_on_stock','tax_rate',
             'created_by', 'created_at', 'updated_at', 'updated_by'
         ]
 
@@ -114,6 +113,8 @@ class ProductSerializer(serializers.ModelSerializer):
                         "Tento produkt je použitý ako surovina a jeho typ sa nedá zmeniť."
                     )
         return attrs
+
+
 
 
 # -----------------------
@@ -220,8 +221,12 @@ class OrderItemSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = OrderItem
-        fields = ["id", "product_id", "product", "product_name", "product_code", "quantity", "price", "total_price"]
-        read_only_fields = ["id", "product", "product_name", "product_code", "total_price"]
+        fields = [
+    "id", "product_id", "product", "product_name", "product_code",
+    "quantity", "price", "total_price", "is_expedited", "status", "production_card"
+]
+
+        read_only_fields = ["id", "product", "product_name", "product_code", "total_price","is_expedited"]
 
     def get_total_price(self, obj):
         return (obj.quantity or 0) * (obj.price or 0)
@@ -232,8 +237,14 @@ class OrderItemSerializer(serializers.ModelSerializer):
         if value < 0:
             raise serializers.ValidationError("Price cannot be negative.")
         return value
+    
+    def validate_quantity(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("Quantity must be greater than 0.")
+        return value
 
- # -----------------------
+
+# -----------------------
 # Serializer pre order
 # -----------------------
 
@@ -266,6 +277,10 @@ class OrderSerializer(serializers.ModelSerializer):
             "status",
             "items",
             "total_price",
+            "delivery_date",
+            "production_plan_items",
+            "note"
+
         ]
 
     def create(self, validated_data):
@@ -331,3 +346,232 @@ class OrderSerializer(serializers.ModelSerializer):
                     item.delete()
 
         return instance
+
+
+# -----------------------
+# ProductionCardSerializer
+# -----------------------
+class ProductionCardSerializer(serializers.ModelSerializer):
+    operator_name = serializers.StringRelatedField(source="operator", read_only=True)
+    plan_item_id = serializers.PrimaryKeyRelatedField(
+        queryset=ProductionPlanItem.objects.all(),
+        source="plan_item",
+        write_only=True
+    )
+    card_number = serializers.CharField(read_only=True)
+    status = serializers.CharField(read_only=True)
+    product_name = serializers.CharField(source="plan_item.product.product_name", read_only=True)
+
+    class Meta:
+        model = ProductionCard
+        fields = [
+            "id",
+            "card_number",
+            "product_name",
+            "plan_item_id",
+            "planned_quantity",
+            "produced_quantity",
+            "defective_quantity",
+            "remaining_quantity",
+            "status",
+            "operator", "operator_name",
+            "start_time", "end_time",
+            "notes",
+            "stock_receipt_created",
+            "created_at", "created_by",
+            "updated_at", "updated_by",
+        ]
+        read_only_fields = ["remaining_quantity", "created_at", "updated_at"]
+
+    def validate_plan_item(self, value):
+        if value.product.product_type.name != "Výrobok":
+            raise serializers.ValidationError(
+                "Výrobnú kartu je možné vytvoriť iba pre produkt typu 'Výrobok'."
+            )
+
+        # Zakáž prenos, ak už je položka completed
+        if value.transfered_pcs >= value.planned_quantity:
+            raise serializers.ValidationError(
+                f"Pre túto plánovú položku ({value.product.product_name}) je už výroba dokončená."
+            )
+
+        requested_qty = self.initial_data.get("planned_quantity")
+        if requested_qty is not None:
+            requested_qty = int(requested_qty)
+            available = value.planned_quantity - value.transfered_pcs
+            if requested_qty > available:
+                raise serializers.ValidationError(
+                    f"Nemožno preniesť {requested_qty} ks – dostupných je len {available} ks."
+                )
+
+        return value
+
+        if value.product.product_type.name != "Výrobok":
+            raise serializers.ValidationError(
+                "Výrobnú kartu je možné vytvoriť iba pre produkt typu 'Výrobok'."
+            )
+
+        requested_qty = self.initial_data.get("planned_quantity")
+        if requested_qty is not None:
+            requested_qty = int(requested_qty)
+            if requested_qty > value.planned_quantity - value.transfered_pcs:
+                raise serializers.ValidationError(
+                    f"Nemožno preniesť {requested_qty} ks – dostupných je len {value.planned_quantity - value.transfered_pcs} ks."
+                )
+
+        return value
+
+    def create(self, validated_data):
+        plan_item = validated_data["plan_item"]
+        planned_quantity = validated_data.get("planned_quantity", plan_item.planned_quantity)
+        validated_data["planned_quantity"] = planned_quantity
+
+       
+
+        return super().create(validated_data)
+
+# -----------------------
+# ProductionPlanItemSerializer
+# -----------------------
+class ProductionPlanItemSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source='product.product_name', read_only=True)
+    production_card = ProductionCardSerializer(read_only=True)
+    ingredients_status = serializers.SerializerMethodField() 
+        # Nové pole pre prenesené kusy
+    transfered_pcs= serializers.IntegerField(required=False, min_value=0)
+
+    class Meta:
+        model = ProductionPlanItem
+        fields = [
+            "id",
+            "production_plan",
+            "product",
+            "product_name",
+            "planned_quantity",
+            "planned_date",
+            "status",
+            "production_card",
+             "ingredients_status",
+             "transfered_pcs"
+        ]
+        read_only_fields = ["product_name","id", "ingredients_status","transfered_pcs"]
+
+    def validate_planned_date(self, value):
+            """Skontroluje, či dátum položky je v rozsahu výrobný plan."""
+            plan = self.instance.production_plan if self.instance else self.initial_data.get("production_plan")
+            
+            # Ak plan je ID, potrebujeme z DB
+            if isinstance(plan, int) or isinstance(plan, str):
+                plan = ProductionPlan.objects.get(id=plan)
+            
+            if not (plan.start_date <= value <= plan.end_date):
+                raise serializers.ValidationError(
+                    f"Dátum položky musí byť v rozsahu výrobný plan: {plan.start_date} – {plan.end_date}"
+                )
+            return value
+    def validate_product(self, value):
+        """Zabezpečí, že sa použije len produkt typu 'výrobok'."""
+        if value.product_type.name != "Výrobok":
+            raise serializers.ValidationError("Do plánu výroby je možné pridať iba produkt typu 'Výrobok'.")
+        return value
+    
+    def get_ingredients_status(self, obj):
+            # vypočíta dostupnosť každej suroviny
+            result = []
+            for link in obj.product.ingredients_links.all():
+                ingredient = link.ingredient
+                required_qty = obj.planned_quantity * link.quantity
+                result.append({
+                    "ingredient": ingredient.product_name,
+                    "required_qty": required_qty,
+                    "available_qty": ingredient.free_quantity,
+                    "is_sufficient": ingredient.free_quantity >= required_qty
+                })
+            return result
+    def update(self, instance, validated_data):
+        pcs = validated_data.pop("planned_quantity", None)
+        if pcs is not None:
+            if pcs > instance.planned_quantity - instance.transfered_pcs:
+                raise serializers.ValidationError(
+                    {"planned_quantity": "Nie je dosť kusov na prenesenie"}
+                )
+            # Pripočítaj prenesené kusy
+            instance.transfered_pcs += pcs
+
+            # 🔹 Nastav status podľa stavu prenosu
+            if instance.transfered_pcs == instance.planned_quantity:
+                instance.status = "completed"
+            elif 0 < instance.transfered_pcs < instance.planned_quantity:
+                instance.status = "partially completed"
+            else:
+                instance.status = "pending"
+
+        instance.save()
+        return instance
+
+
+# -----------------------
+# ProductionPlanSerializer
+# -----------------------
+class ProductionPlanSerializer(serializers.ModelSerializer):
+    items = ProductionPlanItemSerializer(many=True, read_only=True)
+    created_by_name = serializers.StringRelatedField(source="created_by", read_only=True)
+    updated_by_name = serializers.StringRelatedField(source="updated_by", read_only=True)
+    plan_number = serializers.CharField(read_only=True)
+
+    class Meta:
+        model = ProductionPlan
+        fields = [
+            "id",
+            "plan_number",
+            "plan_type",
+            "start_date",
+            "end_date",
+            "items",
+            "created_at",
+            "created_by",
+            "created_by_name",
+            "updated_at",
+            "updated_by",
+            "updated_by_name",
+        ]
+        read_only_fields = [ "plan_number","created_at", "updated_at"]
+
+
+    
+
+# -----------------------
+# StockReceiptSerializer
+# -----------------------
+class StockReceiptSerializer(serializers.ModelSerializer):
+    production_card_number = serializers.CharField(source="production_card.card_number", read_only=True)
+    production_plan_number = serializers.CharField(source="production_plan.plan_number", read_only=True)
+    product_name = serializers.CharField(source="product.product_name", read_only=True)
+    created_by_name = serializers.StringRelatedField(source="created_by", read_only=True)
+
+    class Meta:
+        model = StockReceipt
+        fields = [
+            "id",
+            "receipt_number",
+            "production_card",
+            "production_card_number",
+            "production_plan",
+            "production_plan_number",
+            "invoice_number",
+            "product",
+            "product_name",
+            "quantity",
+            "receipt_date",
+            "created_by",
+            "created_by_name",
+            "notes",
+        ]
+        read_only_fields = [
+            "production_card_number",
+            "production_plan_number",
+            "product_name",
+            "created_by_name",
+            "receipt_number",  # číslo sa bude generovať automaticky, ak nie je zadané
+            "created_by",
+        ]

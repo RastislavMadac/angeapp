@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import User, Product, ProductType, Category, Unit,ProductInstance,ProductIngredient,City,Company,Order,OrderItem
+from .models import User, Product, ProductType, Category, Unit,ProductInstance,ProductIngredient,City,Company,Order,OrderItem,ProductionPlan, ProductionPlanItem, ProductionCard, StockReceipt
 from django.utils.translation import gettext_lazy as _
 
 @admin.register(User)
@@ -39,7 +39,7 @@ class ProductIngredientInline(admin.TabularInline):
 # Admin pre produkt
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ['id','product_name', 'product_type', 'category', 'unit', 'total_quantity', 'price_no_vat']
+    list_display = ['id','product_name', 'product_type', 'total_quantity','reserved_quantity', 'free_quantity','price_no_vat']
     list_filter = ['product_type', 'category']
     search_fields = ['product_name', 'product_id']
     inlines = [ProductIngredientInline]
@@ -60,16 +60,16 @@ class ProductInstanceAdmin(admin.ModelAdmin):
     list_filter = ("id","product", "serial_number")
     search_fields = ("id","product", "serial_number")
 
-@admin.register(ProductType)
-class ProductTypeAdmin(admin.ModelAdmin):
-    list_display = ("id","name", "description")
-    list_filter = ("id","name", "description")
-    search_fields = ("id","name", "description")
-@admin.register(City)
-class CityAdmin(admin.ModelAdmin):
-    list_display = ("id","name", "postal_code", "country")
-    list_filter =  ("id","name", "postal_code", "country")
-    search_fields =  ("id","name", "postal_code", "country")
+# @admin.register(ProductType)
+# class ProductTypeAdmin(admin.ModelAdmin):
+#     list_display = ("id","name", "description")
+#     list_filter = ("id","name", "description")
+#     search_fields = ("id","name", "description")
+# @admin.register(City)
+# class CityAdmin(admin.ModelAdmin):
+#     list_display = ("id","name", "postal_code", "country")
+#     list_filter =  ("id","name", "postal_code", "country")
+#     search_fields =  ("id","name", "postal_code", "country")
 
 @admin.register(Company)
 class CompanyAdmin(admin.ModelAdmin):
@@ -121,3 +121,63 @@ class OrderItemInline(admin.TabularInline):
 
 # Pridať inline do OrderAdmin
 OrderAdmin.inlines = [OrderItemInline]
+
+
+
+
+@admin.register(ProductionPlan)
+class ProductionPlanAdmin(admin.ModelAdmin):
+    list_display = ("plan_number", "plan_type", "start_date", "end_date", "created_by", "created_at")
+    list_filter = ("plan_type", "start_date", "end_date")
+    search_fields = ("plan_number",)
+    ordering = ("-created_at",)
+    readonly_fields = ("created_at", "updated_at")
+    autocomplete_fields = ("created_by", "updated_by")
+
+
+@admin.register(ProductionPlanItem)
+class ProductionPlanItemAdmin(admin.ModelAdmin):
+    list_display = ("id","production_plan", "product", "planned_quantity", "planned_date", "status")
+    list_filter = ("status", "planned_date")
+    search_fields = ("production_plan__plan_number", "product__product_name")
+    autocomplete_fields = ("production_plan", "product", "production_card")
+    ordering = ("-planned_date",)
+
+
+@admin.register(ProductionCard)
+class ProductionCardAdmin(admin.ModelAdmin):
+    list_display = (
+        "card_number",
+        "plan_item",
+        "status",
+        "operator",
+        "planned_quantity",
+        "produced_quantity",
+        "defective_quantity",
+        "remaining_quantity",
+        "start_time",
+        "end_time",
+    )
+    list_filter = ("status", "start_time", "end_time")
+    search_fields = ("card_number", "plan_item__product__product_name")
+    autocomplete_fields = ("plan_item", "operator", "created_by", "updated_by")
+    readonly_fields = ("created_at", "updated_at")
+    ordering = ("-created_at",)
+
+
+@admin.register(StockReceipt)
+class StockReceiptAdmin(admin.ModelAdmin):
+    list_display = (
+        "receipt_number",
+        "product",
+        "quantity",
+        "receipt_date",
+        "invoice_number",
+        "production_card",
+        "production_plan",
+        "created_by",
+    )
+    list_filter = ("receipt_date",)
+    search_fields = ("receipt_number", "invoice_number", "product__product_name")
+    autocomplete_fields = ("product", "production_card", "production_plan", "created_by")
+    ordering = ("-receipt_date",)
