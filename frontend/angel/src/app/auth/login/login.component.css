@@ -33,8 +33,18 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    background: url('/assets/backgroundimage.jpeg') center/cover no-repeat;
-    background-size: cover;
+
+    background:
+        url('/assets/backgroundimage.webp') center center no-repeat,
+
+        url('/assets/backgroundimage.webp') center/cover no-repeat;
+    background-size:
+        600px
+        /* veľkosť loga / predného obrázka */
+        cover;
+    /* veľkosť pozadia */
+
+    background-blend-mode: normal;
 }
 
 /* Sklenený efekt kontajnera */
@@ -44,7 +54,7 @@
     max-width: 311px;
     width: 100%;
     height: 350px;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(247, 243, 243, 0.1);
     border-radius: 10px;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     overflow: hidden;
@@ -77,7 +87,7 @@ label {
 
 /* Nadpisy */
 h2 {
-    color: #fff;
+    color: #616060;
     margin-top: 30px;
     margin-bottom: -20px;
 }
@@ -95,7 +105,7 @@ input {
     border: 1px solid #fff;
     border-radius: 10px;
     background: transparent;
-    color: #fff;
+    color: #181717;
     font-size: 13px;
 }
 
@@ -105,6 +115,13 @@ input::placeholder {
 
 input:focus {
     outline: none;
+}
+
+label {
+    color: rgb(17, 16, 16);
+    font-size: 14px;
+    text-align: center;
+
 }
 
 /* Možnosti, odkazy */
@@ -147,6 +164,6 @@ button:hover {
 /* Ostatný text */
 p {
     font-size: 12px;
-    color: #fff;
+    color: #f3eded;
     margin-top: 15px;
 }

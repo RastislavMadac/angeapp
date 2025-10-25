@@ -21,6 +21,11 @@ export class MasterLayoutComponent<T = any> implements OnChanges {
   /** aktuálne vybraná entita */
   @Input() selectedItem: T | null = null;
 
+  // Nové voliteľné šablóny pre collapsible verziu
+  @Input() collapsibleTemplateInput: any;
+
+  showCollapse = false;
+
   /** emituje vybranú entitu */
   @Output() select = new EventEmitter<T>();
 
@@ -31,6 +36,10 @@ export class MasterLayoutComponent<T = any> implements OnChanges {
     if (changes['items'] && this.items.length && !this.selectedItem) {
       this.setSelectedItem(this.items[0]);
     }
+  }
+
+  toggleCollapse() {
+    this.showCollapse = !this.showCollapse;
   }
 
   setSelectedItem(item: T) {

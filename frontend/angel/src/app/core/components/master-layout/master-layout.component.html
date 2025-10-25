@@ -5,6 +5,19 @@
   </ng-container>
 </div>
 
+<!-- 🔹 Nový collapsible detail -->
+<div class="detail-collapse" *ngIf="collapsibleTemplateInput">
+  <button class="toggle-btn" (click)="toggleCollapse()">
+    {{ showCollapse ? 'Skryť detail' : 'Zobraziť detail' }}
+  </button>
+
+  <div *ngIf="showCollapse" class="collapse-content">
+    <ng-container *ngIf="collapsibleTemplateInput as tpl">
+      <ng-container *ngTemplateOutlet="tpl"></ng-container>
+    </ng-container>
+  </div>
+</div>
+
 <div class="master">
   <ng-container *ngIf="masterTemplateInput as tpl">
     <ng-container *ngTemplateOutlet="tpl"></ng-container>

@@ -58,6 +58,13 @@ export const routes: Routes = [
                     import('./core/components/orders/orders.component')
                         .then(m => m.OrdersComponent),
             },
+            {
+                path: 'productPlan',
+                // canActivate: [roleGuard],
+                loadComponent: () =>
+                    import('./core/components/product-plan/product-plan.component')
+                        .then(m => m.ProductPlanComponent),
+            },
             { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
         ],
     },

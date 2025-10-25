@@ -1,0 +1,97 @@
+<!-- Navbar -->
+<app-navbar [selectedItem]="selectedItem"></app-navbar>
+
+<!-- Small navigation menu -->
+<app-small-navbar [menuItems]="productMenu"></app-small-navbar>
+
+<app-product-plan-table
+*ngIf="showModal"
+></app-product-plan-table>
+
+<!-- Detail template -->
+<ng-template #detailTpl>
+  <form [formGroup]="itemForm" *ngIf="itemForm" class="product-grid" (ngSubmit)="saveItem()">
+
+    <div formArrayName="items">
+      <div *ngFor="let itemGroup of itemsFormArray.controls; let i = index" [formGroupName]="i" class="product-item">
+
+        <!-- Produkt info -->
+        <label class="product1">ID:
+          <input formControlName="id" readonly>
+        </label>    
+        <label class="product1">Názov Produktu:
+          <input formControlName="product_name" readonly>
+        </label>    
+        <label class="product1">Plánované množstvo:
+          <input formControlName="planned_quantity" readonly>
+        </label>    
+        <label class="product1">Dátum výroby:
+          <input formControlName="planned_date" readonly>
+        </label>    
+        <label class="product1">Status:
+          <input formControlName="status" readonly>
+        </label>    
+        <label class="product1">Prenesené množstvo:
+          <input formControlName="transfered_pcs" readonly>
+        </label>    
+
+        <!-- Dropdown button pre ingrediencie -->
+        <button type="button" class="btn-dropdown" (click)="toggleIngredients(i)">
+          Ingrediencie {{ isExpanded[i] ? '▲' : '▼' }}
+        </button>
+
+        <!-- Dropdown obsah ingrediencií -->
+        <div *ngIf="isExpanded[i]" formArrayName="ingredients_status" class="ingredients-table-wrapper">
+          <table class="ingredients-table">
+            <thead>
+              <tr>
+                <th>Názov ingrediencie</th>
+                <th>Požadované množstvo</th>
+                <th>Dostupné množstvo</th>
+                <th>Dostatok</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let ing of getIngredientsFormArray(itemGroup).controls; let j = index"
+                  [formGroupName]="j">
+                <td>{{ ing.get('ingredient')?.value }}</td>
+                <td>{{ ing.get('required_qty')?.value }}</td>
+                <td>{{ ing.get('available_qty')?.value }}</td>
+                <td>
+                  <span [ngClass]="{
+                      'sufficient': ing.get('is_sufficient')?.value,
+                      'insufficient': !ing.get('is_sufficient')?.value
+                    }">
+                    {{ ing.get('is_sufficient')?.value ? '✔️ Áno' : '❌ Nie' }}
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </div>
+
+    <button type="submit" class="btn-save">Uložiť zmeny</button>
+  </form>
+</ng-template>
+
+<!-- Master layout -->
+<app-master-layout
+   [masterTemplateInput]="masterTpl" 
+   [detailTemplateInput]="detailTpl"
+   [items]="objectItems"
+   [(selectedItem)]="selectedItem"
+   (select)="selectItems($event)">
+</app-master-layout>
+
+<!-- Master template -->
+<ng-template #masterTpl>
+  <app-generic-table
+    [columns]="columns"
+    [data]="objectItems"
+    [selectedItem]="selectedItem"
+    (rowClick)="selectItems($event)">
+  </app-generic-table>
+</ng-template>
