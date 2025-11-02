@@ -3,7 +3,7 @@ from rest_framework.exceptions import ValidationError
 from .models import User,Product, ProductType, Category, Unit,ProductInstance,ProductIngredient, Company,Order,OrderItem,StockReceipt,ProductionPlanItem,ProductionPlan,ProductionCard
 from rest_framework.authtoken.models import Token
 import re
-
+from django.core.exceptions import ObjectDoesNotExist
 from django.utils import timezone
 
 # USERS
@@ -248,9 +248,6 @@ class OrderItemSerializer(serializers.ModelSerializer):
 # Serializer pre order
 # -----------------------
 
-
-
-
 class OrderSerializer(serializers.ModelSerializer):
     customer = serializers.StringRelatedField(read_only=True)
     customer_id = serializers.PrimaryKeyRelatedField(
@@ -434,11 +431,13 @@ class ProductionCardSerializer(serializers.ModelSerializer):
 # ProductionPlanItemSerializer
 # -----------------------
 class ProductionPlanItemSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(required=False, read_only=False)
     product_name = serializers.CharField(source='product.product_name', read_only=True)
     production_card = ProductionCardSerializer(read_only=True)
     ingredients_status = serializers.SerializerMethodField() 
         # Nové pole pre prenesené kusy
     transfered_pcs= serializers.IntegerField(required=False, min_value=0)
+    product_id = serializers.CharField(source='product.product_id', read_only=True)
 
     class Meta:
         model = ProductionPlanItem
@@ -446,6 +445,7 @@ class ProductionPlanItemSerializer(serializers.ModelSerializer):
             "id",
             "production_plan",
             "product",
+            "product_id",
             "product_name",
             "planned_quantity",
             "planned_date",
@@ -454,21 +454,123 @@ class ProductionPlanItemSerializer(serializers.ModelSerializer):
              "ingredients_status",
              "transfered_pcs"
         ]
-        read_only_fields = ["product_name","id", "ingredients_status","transfered_pcs"]
+        read_only_fields = [
+                            "ingredients_status",
+                           ]
 
-    def validate_planned_date(self, value):
-            """Skontroluje, či dátum položky je v rozsahu výrobný plan."""
-            plan = self.instance.production_plan if self.instance else self.initial_data.get("production_plan")
+    # def validate_planned_date(self, value):
+    #         """Skontroluje, či dátum položky je v rozsahu výrobný plan."""
+    #         plan = self.instance.production_plan if self.instance else self.initial_data.get("production_plan")
             
-            # Ak plan je ID, potrebujeme z DB
-            if isinstance(plan, int) or isinstance(plan, str):
-                plan = ProductionPlan.objects.get(id=plan)
+    #         # Ak plan je ID, potrebujeme z DB
+    #         if isinstance(plan, int) or isinstance(plan, str):
+    #             plan = ProductionPlan.objects.get(id=plan)
             
-            if not (plan.start_date <= value <= plan.end_date):
+    #         if not (plan.start_date <= value <= plan.end_date):
+    #             raise serializers.ValidationError(
+    #                 f"Dátum položky musí byť v rozsahu výrobný plan: {plan.start_date} – {plan.end_date}"
+    #             )
+    #         return value
+    
+  
+
+    def validate(self, data):
+        if self.instance is not None:
+          current_status = self.instance.status
+        
+        
+        FINAL_STATUSES = ["completed", "canceled","in_production","partially completed"] 
+        
+        if current_status in FINAL_STATUSES:
+            updatable_fields = [
+                "planned_quantity", 
+                "planned_date", 
+                "transfered_pcs", 
+                "product",
+                "status"
+            ]
+            is_attempting_important_change = any(
+                field in data for field in updatable_fields
+            )
+            if is_attempting_important_change:
+                # Môžeme vrátiť chybu na úrovni celého objektu (detail)
                 raise serializers.ValidationError(
-                    f"Dátum položky musí byť v rozsahu výrobný plan: {plan.start_date} – {plan.end_date}"
+                    {"detail": f"Nie je možné meniť položku so statusom '{current_status}'. Položka je uzamknutá."}
                 )
-            return value
+
+
+        return data
+    
+    def validate_planned_date(self, value):
+        """
+        Skontroluje, či dátum položky je v rozsahu výrobného plánu.
+        Táto verzia pokrýva všetky scenáre (Create, Update, Nested Update)
+        a využíva ladiace výstupy na presné zistenie zdroja Plánu.
+        """
+        
+        plan = None
+        
+        # 1. Priorita: Kontext (Najspoľahlivejší pri NESTED operáciách z ProductionPlanSerializer)
+        plan = self.context.get("production_plan")
+        
+        # 2. Sekundárne: Existujúca inštancia (Pre update už existujúcich položiek)
+        if not plan and self.instance:
+            plan = getattr(self.instance, 'production_plan', None)
+            
+        # 3. Tretia možnosť: Rodičovský Serializer (Ak je kontext prázdny)
+        # Niekedy je inštancia rodičovského seriálizátora k dispozícii.
+        if not plan:
+            parent_serializer = self.context.get('parent')
+            if parent_serializer and getattr(parent_serializer, 'instance', None):
+                plan = parent_serializer.instance
+                
+        # 4. Štvrtá možnosť: Ak bol plán poslaný ako ID v dátach (len pre CREATE)
+        if not plan and hasattr(self, 'initial_data'):
+            # Toto sa spustí, len ak seriálizátor ešte nebol validovaný
+            plan_id = self.initial_data.get("production_plan") 
+            if plan_id:
+                plan = plan_id # Bude spracované v kroku 5
+
+        # Ladiaci výstup – zistíme, či bol nejaký zdroj nájdený
+        plan_source = "Nenájdený"
+        if plan:
+            if isinstance(plan, ProductionPlan):
+                plan_source = f"Model ID {plan.id}"
+            else:
+                plan_source = f"ID/Int: {plan}"
+                
+        print(f"DEBUG_DATE_VALIDATION: Plán (pred načítaním) zdroj: {plan_source}")
+
+
+        # 5. Načítanie objektu, ak máme iba ID/Int
+        if plan and not isinstance(plan, ProductionPlan):
+            try:
+                plan_id = getattr(plan, 'id', plan) # Získa ID, ak je to model, inak použije hodnotu
+                plan = ProductionPlan.objects.get(id=plan_id)
+            except ProductionPlan.DoesNotExist:
+                raise serializers.ValidationError(
+                    f"Referencovaný výrobný plán (ID: {plan_id}) nebol nájdený."
+                )
+            except ValueError:
+                raise serializers.ValidationError(
+                    "Neplatná referencia na výrobný plán."
+                )
+        
+        if not plan or not isinstance(plan, ProductionPlan):
+            raise serializers.ValidationError(
+                "Nie je dostupný production_plan pre validáciu dátumu."
+            )
+
+
+        # 6. Finálna validácia rozsahu dátumu
+        if not (plan.start_date <= value <= plan.end_date):
+            raise serializers.ValidationError(
+                f"Dátum položky musí byť v rozsahu výrobného plánu: {plan.start_date} – {plan.end_date}"
+            )
+
+        return value
+    
+    
     def validate_product(self, value):
         """Zabezpečí, že sa použije len produkt typu 'výrobok'."""
         if value.product_type.name != "Výrobok":
@@ -488,33 +590,38 @@ class ProductionPlanItemSerializer(serializers.ModelSerializer):
                     "is_sufficient": ingredient.free_quantity >= required_qty
                 })
             return result
-    def update(self, instance, validated_data):
-        pcs = validated_data.pop("planned_quantity", None)
-        if pcs is not None:
-            if pcs > instance.planned_quantity - instance.transfered_pcs:
-                raise serializers.ValidationError(
-                    {"planned_quantity": "Nie je dosť kusov na prenesenie"}
-                )
-            # Pripočítaj prenesené kusy
-            instance.transfered_pcs += pcs
 
-            # 🔹 Nastav status podľa stavu prenosu
-            if instance.transfered_pcs == instance.planned_quantity:
+
+    # V ProductionPlanItemSerializer
+
+    def update(self, instance, validated_data):
+        
+        
+        instance = super().update(instance, validated_data) 
+        
+        
+        if 'transfered_pcs' in validated_data or 'planned_quantity' in validated_data:
+            
+            # Hodnoty sú už uložené v instance po super().update()
+            if instance.transfered_pcs >= instance.planned_quantity:
                 instance.status = "completed"
-            elif 0 < instance.transfered_pcs < instance.planned_quantity:
+            elif instance.transfered_pcs > 0:
                 instance.status = "partially completed"
             else:
                 instance.status = "pending"
-
-        instance.save()
+                
+            instance.save(update_fields=['status']) # Uloženie len zmeneného statusu
+            
+        # Ak sa menili iné polia (napr. planned_date), zmena prebehla už v super().update()
+            
         return instance
 
 
 # -----------------------
-# ProductionPlanSerializer
+# # ProductionPlanSerializer
 # -----------------------
 class ProductionPlanSerializer(serializers.ModelSerializer):
-    items = ProductionPlanItemSerializer(many=True, read_only=True)
+    items = ProductionPlanItemSerializer(many=True, required=False)
     created_by_name = serializers.StringRelatedField(source="created_by", read_only=True)
     updated_by_name = serializers.StringRelatedField(source="updated_by", read_only=True)
     plan_number = serializers.CharField(read_only=True)
@@ -535,12 +642,225 @@ class ProductionPlanSerializer(serializers.ModelSerializer):
             "updated_by",
             "updated_by_name",
         ]
-        read_only_fields = [ "plan_number","created_at", "updated_at"]
+        read_only_fields = ["ingredients_status"]
+
+    def create(self, validated_data):
+        items_data = validated_data.pop("items", [])
+        plan = ProductionPlan.objects.create(**validated_data)
+
+        for item_data in items_data:
+            # Tu zabezpečíme, že nested serializer dostane objekt plan do contextu
+            item_serializer = ProductionPlanItemSerializer(
+                data=item_data,
+                context={**self.context, "production_plan": plan}  # <-- fix
+            )
+            item_serializer.is_valid(raise_exception=True)
+            ProductionPlanItem.objects.create(
+                production_plan=plan,
+                **item_serializer.validated_data
+            )
+
+        return plan
+
+    # def update(self, instance, validated_data):
+    #     items_data = validated_data.pop("items", None)
+        
+    #     # NOVÝ DEBUG KÓD
+    #     print(f"DEBUG_PLAN_UPDATE: Typ inštancie: {type(instance)}")
+    #     print(f"DEBUG_PLAN_UPDATE: ID inštancie: {getattr(instance, 'id', 'N/A')}")
+    #     print(f"DEBUG_PLAN_UPDATE: Kontext v hlavnom ser. obsahuje 'request': {'request' in self.context}")
+    #     # KONIEC NOVÉHO DEBUG KÓDU
+        
+
+    #     # --- Update hlavného plánu ---
+    #     for attr, value in validated_data.items():
+    #         setattr(instance, attr, value)
+    #     instance.save()
+
+    #     plan_instance = instance
+        
+    #     if items_data is not None:
+    #         # Existujúce položky do dict {id: instance}
+    #         existing_items = {item.id: item for item in plan_instance.items.all()}
+
+    #         for item_data in items_data:
+    #             item_id = item_data.get("id", None)
+
+    #             if item_id and item_id in existing_items:
+    #                 # --- Update existujúcej položky ---
+    #                 item_instance = existing_items[item_id]
+
+    #                 # ✅ OPRAVA: Použite kontext so spread operátorom **self.context
+    #                 item_serializer = ProductionPlanItemSerializer(
+    #                     item_instance,
+    #                     data=item_data,
+    #                     partial=True,
+    #                     context={**self.context, "production_plan": plan_instance} 
+    #                 )
+    #                 item_serializer.is_valid(raise_exception=True)
+    #                 item_serializer.save()
+                
+    #             else: 
+    #                 # --- Vytvorenie novej položky ---
+    #                 # ... overenie požadovaných polí ...
+                    
+    #                 # ✅ OPRAVA: Použite kontext so spread operátorom **self.context
+    #                 new_item_serializer = ProductionPlanItemSerializer(
+    #                     data=item_data,
+    #                     context={**self.context, "production_plan": plan_instance} 
+    #                 )
+    #                 new_item_serializer.is_valid(raise_exception=True)
+    #                 ProductionPlanItem.objects.create(
+    #                     production_plan=instance,
+    #                     **new_item_serializer.validated_data
+    #                 )
+
+    #     return instance
 
 
-    
 
-# -----------------------
+    # V triede ProductionPlanSerializer
+
+
+    def update(self, instance, validated_data):
+        
+        print("DEBUG: Spustená metóda update pre ProductionPlan.") 
+        
+        items_data = validated_data.pop("items", None)
+        
+        # 1. Aktualizácia hlavnej inštancie ProductionPlan
+        instance = super().update(instance, validated_data) 
+        
+        if items_data is not None:
+            
+            items_to_keep = [] 
+
+            for item_data_validated in items_data:
+                
+                # Pracujeme s kópiou dát pre aktuálnu položku
+                item_data = item_data_validated.copy() 
+                item_id = item_data.get('id', None) # ID už by malo byť vďaka úprave ItemSerializer
+                
+                # 🚨 KONTROLA ID: 
+                if item_id is not None:
+                    try:
+                        item_id = int(item_id)
+                    except (ValueError, TypeError):
+                        item_id = None
+                
+                print(f"DEBUG_FINAL_CHECK: Item data pred spracovaním: {item_data}")
+                print(f"DEBUG_FINAL_CHECK: Zistená hodnota item_id: {item_id}")
+                
+                # Korekcia Product (prevod z objektu na ID, ak je potrebné)
+                if 'product' in item_data and item_data['product'] is not None and not isinstance(item_data['product'], int):
+                    if hasattr(item_data['product'], 'id'):
+                        item_data['product'] = item_data['product'].id
+                    else:
+                        item_data['product'] = None
+                
+                # Odstránenie cudzieho kľúča
+                item_data.pop('production_plan', None)
+                
+                
+                # --------------------------------------------------
+                # SCENÁR A: UPDATE existujúcej položky (ID je platné)
+                # --------------------------------------------------
+                if item_id: 
+                    print(f"\nDEBUG: Pokus o UPDATE položky s ID: {item_id}")
+                    
+                    # Pre UPDATE: Kópia dát na odoslanie do serializátora
+                    update_data = item_data.copy()
+                    
+                    # 🚨 KRITICKÁ ÚPRAVA 1: ID odstraňujeme z DÁT pre serializátor
+                    update_data.pop('id', None) 
+                    
+                    print(f"DEBUG: Vstupná dáta pre UPDATE serializátor: {update_data}")
+                    
+                    try:
+                        item = instance.items.get(id=item_id)
+                        
+                        # Ručné odstránenie povinných polí, ak neboli dodané (ochrana)
+                        if 'product' not in update_data:
+                            update_data.pop('product', None)
+                        if 'planned_date' not in update_data:
+                            update_data.pop('planned_date', None)
+
+                        item_serializer = ProductionPlanItemSerializer(item, data=update_data, partial=True)
+                        
+                        if not item_serializer.is_valid():
+                            raise serializers.ValidationError(item_serializer.errors)
+                            
+                        item_serializer.save() 
+                        items_to_keep.append(item.id)
+                        print(f"DEBUG: UPDATE položky {item_id} prebehol úspešne.")
+                        
+                    except ObjectDoesNotExist:
+                        print(f"DEBUG: Položka {item_id} nebola nájdená. Fallback na CREATE.")
+                        item_id = None 
+                        
+                    except serializers.ValidationError as e:
+                        errors = e.detail
+                        raise serializers.ValidationError({"items": f"Chyba pri validácii aktualizácie položky {item_id}: {errors}"})
+
+                    except Exception as e:
+                        raise serializers.ValidationError({"items": f"Neočakávaná chyba pri aktualizácii položky {item_id}: {str(e)}"})
+
+
+                # --------------------------------------------------------------------------------------
+                # SCENÁR B: CREATE novej položky (ID je None)
+                # --------------------------------------------------------------------------------------
+                if item_id is None:
+                    print(f"\nDEBUG: Pokus o CREATE novej položky.")
+
+                    # Kontrola: Ak chýbajú povinné polia, hlásime chybu
+                    if 'product' not in item_data or 'planned_date' not in item_data:
+                        missing = []
+                        if 'product' not in item_data: missing.append('product')
+                        if 'planned_date' not in item_data: missing.append('planned_date')
+                        raise serializers.ValidationError({"items": f"Pre vytvorenie novej položky musia byť dodané polia: {', '.join(missing)}."})
+
+                    print(f"DEBUG: Vstupná dáta pre CREATE: {item_data}")
+                    
+                    try:
+                        
+                        creation_context = self.context.copy()
+                        creation_context['production_plan'] = instance
+                        item_data['production_plan'] = instance.id 
+                        
+                        # 🚨 KRITICKÁ ÚPRAVA 2: Odstránenie ID pre CREATE
+                        item_data.pop('id', None) 
+
+                        create_serializer = ProductionPlanItemSerializer(
+                            data=item_data, 
+                            context=creation_context 
+                        )
+                        
+                        if not create_serializer.is_valid():
+                            raise serializers.ValidationError(create_serializer.errors)
+                        
+                        validated_data_for_create = create_serializer.validated_data.copy()
+                        validated_data_for_create.pop('production_plan', None)
+                        
+                        item = ProductionPlanItem.objects.create(
+                            production_plan=instance, 
+                            **validated_data_for_create
+                        )
+                        
+                        items_to_keep.append(item.id)
+                        print(f"DEBUG: CREATE novej položky prebehol úspešne. ID: {item.id}")
+                        
+                    except serializers.ValidationError as e:
+                        errors = e.detail
+                        raise serializers.ValidationError({"items": f"Chyba pri vytváraní novej položky: {errors}"})
+                    
+                    except Exception as e:
+                        raise serializers.ValidationError({"items": f"Neočakávaná chyba pri vytváraní novej položky: {str(e)}"})
+                        
+        # 4. Mazanie zostáva VYPNUTÉ
+        return instance
+
+
+# ---------------------
 # StockReceiptSerializer
 # -----------------------
 class StockReceiptSerializer(serializers.ModelSerializer):
@@ -575,3 +895,17 @@ class StockReceiptSerializer(serializers.ModelSerializer):
             "receipt_number",  # číslo sa bude generovať automaticky, ak nie je zadané
             "created_by",
         ]
+
+# -----------------------
+# ProductForProductPlanSerializer
+# -----------------------
+class ProductForProductPlanSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Product
+        fields = [
+            'id', 'product_id', 'product_name', 'description',
+            'product_type', 'unit', 'category', 'weight_item',
+            'price_no_vat', 'tax_rate', 'total_quantity',
+            'reserved_quantity', 'free_quantity', 'minimum_on_stock'
+        ]
+        read_only_fields = fields  # všetko read-only

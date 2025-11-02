@@ -5,7 +5,7 @@ from django.utils import timezone
 from django.shortcuts import render
 from rest_framework import viewsets,filters
 from .models import User,ProductType, Category, Unit, Product,ProductInstance,ProductIngredient,Company,Order,OrderItem,ProductionCard,ProductionPlan,ProductionPlanItem,StockReceipt
-from .serializers import UserSerializer,ProductTypeSerializer, CategorySerializer, UnitSerializer, ProductSerializer,ProductInstanceSerializer,ProductIngredientSerializer,CompanySerializer,OrderItemSerializer,OrderSerializer,  ProductionPlanSerializer,ProductionPlanItemSerializer,    ProductionCardSerializer,StockReceiptSerializer
+from .serializers import UserSerializer,ProductTypeSerializer, CategorySerializer, UnitSerializer, ProductSerializer,ProductInstanceSerializer,ProductIngredientSerializer,CompanySerializer,OrderItemSerializer,OrderSerializer,  ProductionPlanSerializer,ProductionPlanItemSerializer,    ProductionCardSerializer,StockReceiptSerializer,ProductForProductPlanSerializer
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied
@@ -281,15 +281,37 @@ class ProductionPlanViewSet(viewsets.ModelViewSet):
     search_fields = ["plan_number"]
     ordering_fields = ["start_date", "end_date"]
 
+    def get_serializer_context(self):
+        """
+        Rozšírenie kontextu o aktuálnu inštanciu ProductionPlan 
+        pri volaní PATCH/PUT.
+        """
+        context = super().get_serializer_context()
+        
+        # Kód sa spustí len pre PATCH/PUT na existujúcej inštancii
+        if self.action in ('update', 'partial_update'):
+            try:
+                # Získajte inštanciu (ktorú už ViewSet našiel)
+                plan_instance = self.get_object() 
+                
+                # Pridajte ju do kontextu
+                context["production_plan"] = plan_instance
+                print(f"DEBUG_VIEWSET_CONTEXT: Pridaný plán ID {plan_instance.id} do kontextu.")
+                
+            except Exception as e:
+                # Ak sa nepodarí nájsť inštanciu, len pokračujeme
+                print(f"DEBUG_VIEWSET_CONTEXT: Chyba pri získavaní inštancie: {e}")
+                pass
 
+        return context
     def perform_create(self, serializer):
-        # Automatické generovanie plan_number
         current_year = timezone.now().year
         prefix = f"{current_year}PV"
         last_plan = ProductionPlan.objects.filter(plan_number__startswith=prefix).order_by("plan_number").last()
         last_number = int(last_plan.plan_number[-4:]) if last_plan else 0
         plan_number = f"{prefix}{str(last_number + 1).zfill(4)}"
 
+        # Prenesie aj items do create() metódy serializeru
         serializer.save(
             plan_number=plan_number,
             created_by=self.request.user,
@@ -724,6 +746,15 @@ class ProductionPlanItemViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         serializer.save()
+    def partial_update(self, request, *args, **kwargs):
+        
+        # 1. Zobrazenie prijatých dát na konzole
+        print("--- PRIJATÉ DÁTA Z KLIENTA (request.data) ---")
+        print(request.data)
+        print("---------------------------------------------")
+        
+        # 2. Zavolaj predvolenú implementáciu na spracovanie requestu
+        return super().partial_update(request, *args, **kwargs)
 
     # Custom akcia na vytvorenie z objednávky
     @action(detail=False, methods=["post"], url_path="create-from-order")
@@ -764,3 +795,26 @@ class ProductionPlanItemViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(plan_item)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+# -----------------------
+# ProductByTypeViewSet
+# -----------------------
+class ProductForProductPlanViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = ProductForProductPlanSerializer
+
+    def get_queryset(self):
+        # Skúsim nájsť typ "Výrobok"
+        try:
+            vyrobok_type = ProductType.objects.get(name__iexact='výrobok')
+            print(f"Found ProductType: {vyrobok_type} (ID: {vyrobok_type.id})")
+        except ProductType.DoesNotExist:
+            print("ProductType 'výrobok' not found")
+            return Product.objects.none()
+
+        qs = Product.objects.filter(product_type=vyrobok_type)
+        print(f"Queryset: {qs}")  # vypíše queryset
+        print(f"SQL: {qs.query}")  # vypíše SQL dotaz
+        print(f"Count: {qs.count()}")  # počet objektov v queryset
+        return qs
+

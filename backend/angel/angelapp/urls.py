@@ -1,6 +1,6 @@
 from django.urls import path,include
 from rest_framework import routers 
-from .views import UserViewSet,CustomAuthToken,CurrentUserView, ProductTypeViewSet, CategoryViewSet, UnitViewSet, ProductViewSet,ProductInstanceViewSet,ProductIngredientViewSet,ManufacturedProductViewSet,ManufacturedIngredientsProductViewSet,CurrentUserView,CompanyViewSet,OrderViewSet,OrderItemViewSet,get_product_by_code,ProductionPlanItemViewSet,ProductionPlanViewSet,ProductionCardViewSet,StockReceiptViewSet
+from .views import UserViewSet,CustomAuthToken,CurrentUserView, ProductTypeViewSet, CategoryViewSet, UnitViewSet, ProductViewSet,ProductInstanceViewSet,ProductIngredientViewSet,ManufacturedProductViewSet,ManufacturedIngredientsProductViewSet,CurrentUserView,CompanyViewSet,OrderViewSet,OrderItemViewSet,get_product_by_code,ProductionPlanItemViewSet,ProductionPlanViewSet,ProductionCardViewSet,StockReceiptViewSet,ProductForProductPlanViewSet
 from . import views
 
 router=routers.DefaultRouter() 
@@ -20,6 +20,7 @@ router.register(r'production-plans', ProductionPlanViewSet, basename='production
 router.register(r'production-plan-items', ProductionPlanItemViewSet, basename='production-plan-item')
 router.register(r'production-cards', ProductionCardViewSet, basename='production-card')
 router.register(r'stock-receipts', StockReceiptViewSet, basename='stock-receipt')
+router.register(r'productForProductPlan', ProductForProductPlanViewSet, basename='productForProductPlan')
 
 
 
