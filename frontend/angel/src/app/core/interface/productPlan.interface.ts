@@ -1,4 +1,5 @@
 export interface ProductPlanInterface {
+    is_serialized(is_serialized: any): boolean;
 
     id: number;
     plan_number: string;
@@ -9,6 +10,7 @@ export interface ProductPlanInterface {
         id: number;
         production_plan: number;
         product: number;
+        product_id: String;
         product_name: string;
         planned_quantity: number;
         planned_date: string;   // ISO dátum
@@ -32,4 +34,36 @@ export interface ProductPlanInterface {
 
 
 
-export interface ProductPlanItemsInterface { }
+export interface ProductPlanItemsInterface {
+    id: number;
+    product_id: string;
+    product_name: string;
+    description: string;
+    product_type: number;   // ID typu produktu
+    unit: number;           // ID jednotky
+    category: number;       // ID kategórie
+    weight_item: string;    // môže byť string, lebo prichádza z backendu ako "0.600"
+    price_no_vat: string;   // string kvôli presnosti (napr. "499.99")
+    tax_rate: string;       // string kvôli presnosti
+    total_quantity: number;
+    reserved_quantity: number;
+    free_quantity: number;
+    minimum_on_stock: number;
+    is_serialized: boolean;
+}
+
+export interface ProductPlanProductsInterface {
+    id: number;
+    production_plan: number;   // ID nadradeného plánu
+    product: number;           // ID produktu
+    product_name: string;
+    planned_quantity: number;
+    planned_date: string;      // ISO dátum, napr. "2025-10-01"
+    status: 'pending' | 'in_production' | 'partially completed' | 'completed' | 'canceled';
+    production_card?: any | null;
+    transfered_pcs: number;
+}
+
+export type ProductPlanItemForm = ProductPlanProductsInterface & {
+    product_id: string | null; // ⬅️ Kód produktu (LEN pre UI a vyhľadávanie)
+};

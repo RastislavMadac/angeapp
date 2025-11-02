@@ -4,36 +4,76 @@
 <!-- Small navigation menu -->
 <app-small-navbar [menuItems]="productMenu"></app-small-navbar>
 
-<app-product-plan-table
-*ngIf="showModal"
-></app-product-plan-table>
-
-<!-- Detail template -->
+<!-- 🔹 DETAIL TEMPLATE -->
 <ng-template #detailTpl>
   <form [formGroup]="itemForm" *ngIf="itemForm" class="product-grid" (ngSubmit)="saveItem()">
 
+    <!-- 🔸 Sekcia: základné info o pláne -->
+    <div class="plan-header">
+      <label>Číslo plánu:
+        <input formControlName="plan_number" readonly>
+      </label>
+      <label>Typ plánu:
+        <input formControlName="plan_type" readonly>
+      </label>
+      <label>Platný od:
+        <input type="date" formControlName="start_date">
+      </label>
+      <label>Platný do:
+        <input type="date" formControlName="end_date">
+      </label>
+    </div>
+
+    <hr />
+  
+
+    <!-- 🔹 Sekcia: produkty -->
     <div formArrayName="items">
-      <div *ngFor="let itemGroup of itemsFormArray.controls; let i = index" [formGroupName]="i" class="product-item">
+      <div *ngFor="let itemGroup of itemsFormArray.controls; let i = index" [formGroupName]="i" class="product-item"
+      (click)="selectItemForDelete(i)" 
+        [class.is-selected]="selectedItemIndex === i">
 
         <!-- Produkt info -->
-        <label class="product1">ID:
-          <input formControlName="id" readonly>
-        </label>    
-        <label class="product1">Názov Produktu:
-          <input formControlName="product_name" readonly>
-        </label>    
-        <label class="product1">Plánované množstvo:
-          <input formControlName="planned_quantity" readonly>
-        </label>    
-        <label class="product1">Dátum výroby:
-          <input formControlName="planned_date" readonly>
-        </label>    
-        <label class="product1">Status:
-          <input formControlName="status" readonly>
-        </label>    
-        <label class="product1">Prenesené množstvo:
-          <input formControlName="transfered_pcs" readonly>
-        </label>    
+        <h3>
+          {{ itemGroup.get('product_name')?.value }} 
+          
+          <span *ngIf="itemGroup.get('product_id')?.value">({{ itemGroup.get('product_id')?.value }})</span>
+      </h3>
+
+        <div class="product-fields">
+          <label>ID:
+            <input formControlName="id" readonly>
+          </label>
+          <label>Kód produktu:
+            <input formControlName="product" >
+          </label>
+          <label>Kód produktu:
+            <input 
+            formControlName="product_id" 
+            placeholder="Zadajte jedinečný kód produktu..."
+            type="text"
+            autocomplete="off"
+        >
+          </label>
+          <label>Plánované množstvo:
+            <input type="number" formControlName="planned_quantity" min="1">
+          </label>
+          <label>Dátum výroby:
+            <input type="date" formControlName="planned_date">
+          </label>
+          <label>Status:
+            <select formControlName="status">
+              <option value="pending">Čaká sa</option>
+              <option value="in_production">Vo výrobe</option>
+              <option value="partially completed">Čiastočne prenesená</option>
+              <option value="completed">Dokončené</option>
+              <option value="canceled">Zrušené</option>
+            </select>
+          </label>
+          <label>Prenesené množstvo:
+            <input formControlName="transfered_pcs" readonly>
+          </label>
+        </div>
 
         <!-- Dropdown button pre ingrediencie -->
         <button type="button" class="btn-dropdown" (click)="toggleIngredients(i)">
@@ -52,8 +92,7 @@
               </tr>
             </thead>
             <tbody>
-              <tr *ngFor="let ing of getIngredientsFormArray(itemGroup).controls; let j = index"
-                  [formGroupName]="j">
+              <tr *ngFor="let ing of getIngredientsFormArray(itemGroup).controls; let j = index" [formGroupName]="j">
                 <td>{{ ing.get('ingredient')?.value }}</td>
                 <td>{{ ing.get('required_qty')?.value }}</td>
                 <td>{{ ing.get('available_qty')?.value }}</td>
@@ -73,11 +112,37 @@
       </div>
     </div>
 
-    <button type="submit" class="btn-save">Uložiť zmeny</button>
+    <div class="form-actions">
+      <button type="submit" class="btn-save"
+      matTooltip="Zmaže aktuálne vybranú položku plánu">💾 Uložiť zmeny</button>
+
+      <button type="button" class="btn-cancel" (click)="cancelEdit()"
+      matTooltip="Zmaže aktuálne vybranú položku plánu">❌ Zrušiť</button>
+      
+      <button 
+    type="button" 
+    class="btn-add" 
+    (click)="addNewItem()" 
+    matTooltip="Pridá novú položku produktu do plánu."
+  >
+    ➕ Pridať položku
+  </button>
+
+      <button 
+        type="button" 
+        class="btn-delete" 
+        (click)="deleteItem()" 
+        [disabled]="selectedItemIndex === null"
+        matTooltip="Zmaže aktuálne vybranú položku plánu"
+      >
+        🗑️ Vymazať položku
+      </button>
+    </div>
+
   </form>
 </ng-template>
 
-<!-- Master layout -->
+<!-- 🔹 MASTER LAYOUT -->
 <app-master-layout
    [masterTemplateInput]="masterTpl" 
    [detailTemplateInput]="detailTpl"
@@ -86,12 +151,16 @@
    (select)="selectItems($event)">
 </app-master-layout>
 
-<!-- Master template -->
+<!-- 🔹 MASTER TEMPLATE -->
 <ng-template #masterTpl>
   <app-generic-table
     [columns]="columns"
     [data]="objectItems"
     [selectedItem]="selectedItem"
-    (rowClick)="selectItems($event)">
+    (rowClick)="selectItems($event)"
+   >
   </app-generic-table>
 </ng-template>
+
+
+

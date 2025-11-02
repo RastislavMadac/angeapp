@@ -1,3 +1,60 @@
-<p>product-plan-table works! master</p>
+<!--
+<app-navbar></app-navbar>
+
+<div class="fullscreen-overlay">
 
 
+  
+  
+  <ng-template #detailTpl>
+    <form *ngIf="form" [formGroup]="form">
+      <div formArrayName="items">
+        <div *ngFor="let itemCtrl of itemsFormArray.controls; let i = index" [formGroupName]="i" class="item-row">
+          <label>Kód produktu: <input formControlName="product_id"></label>
+          <label>Názov produktu: <input formControlName="product_name"></label>
+          <label>Plánované množstvo: <input type="number" formControlName="planned_quantity"></label>
+          <label>Status: <input formControlName="status"></label>
+          <label>Prenesené množstvo: <input type="number" formControlName="transfered_pcs"></label>
+          <hr>
+        </div>
+      </div>
+    </form>
+  </ng-template>
+  
+
+
+  <app-master-layout
+    [masterTemplateInput]="planTpl"
+    [detailTemplateInput]="detailTpl"
+    [items]="displayedPlan"
+    [(selectedItem)]="selectedItem"
+    (select)="onSelectItem($event)">
+  </app-master-layout>
+
+  <ng-template #planTpl>
+    <app-generic-table
+      [columns]="planColumns"
+      [data]="displayedPlan"
+      [selectedItem]="selectedItem"
+      (rowClick)="onSelectItem($event)">
+    </app-generic-table>
+  </ng-template>
+
+  <app-master-layout
+    [masterTemplateInput]="itemsTpl"
+    [items]="displayedItems"
+    [(selectedItem)]="selectedItem"
+    (select)="onSelectItem($event)">
+  </app-master-layout>
+
+  <ng-template #itemsTpl>
+    <app-generic-table
+      [columns]="itemColumns"
+      [data]="displayedItems"
+      [selectedItem]="selectedItem"
+      (rowClick)="onSelectItem($event)">
+    </app-generic-table>
+  </ng-template>
+
+</div>
+-->

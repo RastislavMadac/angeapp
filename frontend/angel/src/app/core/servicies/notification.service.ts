@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Subject, Observable } from 'rxjs';
 
-export type NotificationType = 'info' | 'warn';
+export type NotificationType = 'success' | 'info' | 'warn' | 'error';;
 
 @Injectable({ providedIn: 'root' })
 export class NotificationService {

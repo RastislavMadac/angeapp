@@ -1,11 +1,11 @@
 app-orders-customers {
-    position: fixed;
+    /* position: fixed; */
     background: white;
-    top: 0;
+    /* top: 0;
     left: 0;
     width: 100vw;
     height: 100vh;
-    z-index: 1000;
+    z-index: 1000; */
 }
 
 app-orders-product {

@@ -1,0 +1,22 @@
+<app-navbar
+  [selectedItem]="selectedProduct"
+></app-navbar>
+
+<nav class="small-navbar">
+  <button (click)="confirmSelection()">Pridať Produkt</button>
+  <button (click)="onClose()">Close door</button>
+
+  <app-master-layout
+    [masterTemplateInput]="masterTpl"
+    [items]="product"
+    >
+  </app-master-layout>
+
+  <ng-template #masterTpl>
+    <app-generic-table
+      [columns]="columns"
+      [data]="product"
+      >
+    </app-generic-table>
+  </ng-template>
+</nav>
