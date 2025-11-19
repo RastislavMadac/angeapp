@@ -167,7 +167,7 @@ export class OrderItemsComponent implements OnInit, OnChanges {
     // 🔹 ADD tlačidlo
     this.buttonService.add$.subscribe(() => {
       console.log("➕ ADD z buttonService zachytené");
-      this.openModalProduct(); // odstrániť podmienku if
+      this.openModalProduct();
     });
 
   }

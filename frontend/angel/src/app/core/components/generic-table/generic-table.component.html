@@ -1,3 +1,5 @@
+<div class="table-wrapper">
+
 <table class="app-table"> 
 
   <thead> 
@@ -6,9 +8,21 @@
 
       <!-- Hlavičky tabuľky --> 
 
-      <th *ngFor="let col of headers">{{ col.label || col.key }}</th> 
+      <th *ngFor="let col of headers" style="cursor: pointer; user-select: none;">
+        <span>{{ col.label || col.key }}</span>
+        <button mat-icon-button (click)="sortData(col.key)">
+          <mat-icon>
+            {{ sortColumn === col.key ? (sortAsc ? 'arrow_upward' : 'arrow_downward') : 'unfold_more' }}
+          </mat-icon>
+        </button>
 
+
+      </th> 
+   <!-- tlačidlo alebo ikonka zoradenia -->
+  
     </tr> 
+   
+     
 
   </thead> 
 
@@ -34,5 +48,5 @@
 
 </table> 
 
- 
+</div>
  

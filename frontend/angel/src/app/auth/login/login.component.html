@@ -8,17 +8,16 @@
         <form (ngSubmit)="onSubmit()">
 
           <label for="username">Používateľské meno</label>
-          <input type="text" id="username" [(ngModel)]="username" name="username" required>
+          <input type="text" id="username" [(ngModel)]="username" name="username" required >
       
           <label for="password">Heslo</label>
-          <input type="password" id="password" [(ngModel)]="password" name="password" required>
+          <input type="password" id="password" [(ngModel)]="password" name="password" required >
       
           <button type="submit">Prihlásiť sa</button>
+          <button (click)="updateuUser()">userName</button>
+          
       
-          <div *ngIf="errorMessage" class="error">
-            {{ errorMessage }}
-          </div>
-            
-            
+          
+                        
         </form>
     </div>

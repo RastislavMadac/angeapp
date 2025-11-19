@@ -1,15 +1,16 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { FormArray, FormBuilder, FormGroup, Validators } from '@angular/forms';
-import { CommonModule } from '@angular/common';
+import { CommonModule, formatDate } from '@angular/common';
 import { ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { Observable, debounceTime, distinctUntilChanged, filter, forkJoin, of, switchMap } from 'rxjs';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { Observable, Subscription, debounceTime, distinctUntilChanged, filter, forkJoin, of, switchMap } from 'rxjs';
 
 // Interfaces
-import { ProductPlanInterface, ProductPlanItemForm, ProductPlanItemsInterface, ProductPlanProductsInterface } from '../../interface/productPlan.interface';
+import { ProductFromModal, ProductPlanInterface, ProductPlanItemForm, ProductPlanItemsInterface, ProductPlanProductsInterface } from '../../interface/productPlan.interface';
 import { TableColumn } from '../../interface/tablecolumnn.interface';
 
 // Services
@@ -22,6 +23,9 @@ import { GenericTableComponent } from '../generic-table/generic-table.component'
 import { MasterLayoutComponent } from '../master-layout/master-layout.component';
 import { NavbarComponent } from '../navbar/navbar.component';
 import { SmallNavbarComponent } from '../small-navbar/small-navbar.component';
+import { ProductPlanProductComponent } from '../product-plan-products/product-plan-products';
+import { environment } from '../../../../enviroment/enviroment';
+import { codeValidator, integerValidatorWithNotify } from '../validators/form.validators';
 
 @Component({
   selector: 'app-product-plan',
@@ -39,9 +43,11 @@ import { SmallNavbarComponent } from '../small-navbar/small-navbar.component';
     NavbarComponent,
     SmallNavbarComponent,
     GenericTableComponent,
+    ProductPlanProductComponent,
+    MatProgressSpinnerModule
   ],
 })
-export class ProductPlanComponent implements OnInit {
+export class ProductPlanComponent implements OnInit, OnDestroy {
   showModal = false;
   isLoading = true;
   errorMessage = '';
@@ -52,19 +58,22 @@ export class ProductPlanComponent implements OnInit {
 
   isExpanded: { [key: number]: boolean } = {};
   selectedItemIndex: number | null = null;
-  private nextAvailableTempId: number = 1;
-  searchResultsMap: Map<number, ProductPlanItemsInterface[]> = new Map();
+  private nextAvailableTempId: number = 0;
+  private maxServerIdOnLoad: number = 0;
+  private maxServerIdOnLoadProduct: number = 0;
+
+
 
 
   productMenu = [
     { label: 'Hlavný Zoznam', styleClass: 'btn-new navigation', click: () => this.closeModal() },
-    { label: 'Zoznam položiek', styleClass: 'btn-popular navigation', click: () => this.openModal() },
+    // { label: 'Zoznam položiek', styleClass: 'btn-popular navigation', click: () => this.openModal() },
   ];
 
   columns: TableColumn[] = [
     { key: 'id', label: 'Kód', type: 'number' },
     { key: 'plan_number', label: 'Číslo plánu', type: 'text' },
-    { key: 'plan_type', label: 'Typ plánu', type: 'text' },
+    // { key: 'plan_type', label: 'Typ plánu', type: 'text' },
     { key: 'start_date', label: 'Platný od', type: 'text' },
     { key: 'end_date', label: 'Platný do', type: 'text' },
   ];
@@ -85,19 +94,15 @@ export class ProductPlanComponent implements OnInit {
 
 
   /** 🔹 Otvorí modal s plánom */
-  openModal(plan?: ProductPlanInterface) {
-    if (plan) {
-      this.selectedItem = plan;
-      this.initForm(plan);
-    }
-    this.showModal = true;
-  }
+  openModal() { this.showModal = true; console.log('Modal showModal =', this.showModal); }
 
   closeModal() {
     this.showModal = false;
   }
 
-  // V ProductPlanComponent.ts
+  //----------------------------------------------------------------------------
+  // #region  loadAllItemsProduct() funkcia
+  //ANCHOR - loadAllItemsProduct() funkcia
 
   private loadAllItemsProduct() {
     if (!this.userService.isLoggedIn()) {
@@ -112,72 +117,101 @@ export class ProductPlanComponent implements OnInit {
       next: (items) => {
         this.objectItemsProduct = items.map((c) => ({ ...c }));
 
-        // 🚀 KĽÚČOVÁ ÚPRAVA: Nájdeme najvyššie ID a nastavíme nextAvailableTempId
-        let maxId = 0;
-        this.objectItemsProduct.forEach(item => { // 👈 PREMENNÁ 'item' je teraz položka
-          if (item.id && item.id > maxId) {
-            maxId = item.id;
-          }
-        });
-        this.nextAvailableTempId = maxId + 1;
+        const ids = this.objectItemsProduct.map(item => item.id || 0);
+        const maxId = Math.max(...ids)
 
-        // ... (logika pre nastavenie selectedItem a initForm) ...
-        if (this.selectedItem) {
-          // ... (zabezpečenie refresha formulára)
-        } else if (this.objectItems.length) {
-          // ... (ak je prvýkrát, nastav prvý plán)
-        }
+
+        // 🚨 KĽÚČOVÉ NASTAVENIE: Max ID zo servera
+        this.maxServerIdOnLoadProduct = maxId;
+
+        // Nastavíme temp ID na o 1 vyššie než max server ID
+        this.nextAvailableTempId = maxId + 1;
 
         this.isLoading = false;
       },
-      // ... (Error handling) ...
+      error: (err) => {
+        this.notify.showError(err.error?.message || 'Nepodarilo sa načítať dáta Z this.productPlanService.loadItemPlans ');
+        this.isLoading = false;
+      }
     });
   }
 
-  /** 🔹 Načítanie všetkých plánov */
+  //#endregion
+  //----------------------------------------------------------------------------
+  // #region  private loadAllItems() funkcia / 
+  //ANCHOR - loadAllItems() funkcia
+  // /** 🔹 Načítanie všetkých plánov */
   private loadAllItems() {
     if (!this.userService.isLoggedIn()) {
-      this.errorMessage = 'Nie ste prihlásený';
+      //STUB - 'Nie ste prihlásený
+      if (!environment.production && environment.debug) { console.log('Nie ste prihlásený'); }
+      this.notify.showError('Nie ste prihlásený');
       this.isLoading = false;
       return;
     }
 
     this.isLoading = true;
+    this.errorMessage = '';
     this.productPlanService.loadAllProductPlans().subscribe({
       next: (items) => {
         this.objectItems = items.map((c) => ({ ...c }));
+        //STUB - 1. Data z loadAllItems:", this.objectItems
+        if (!environment.production && environment.debug) {
+          console.log("1. Data z loadAllItems:", this.objectItems);
 
-        if (this.selectedItem) {
-          const updatedSelectedItem = this.objectItems.find(i => i.id === this.selectedItem!.id);
 
-          if (updatedSelectedItem) {
-            this.selectedItem = updatedSelectedItem; // Aktualizujeme referenciu
-            this.initForm(this.selectedItem);       // ZNOVA VYTVORÍME FORMULÁR s NOVÝMI DÁTAMI
+          const allIds = this.objectItems.map(item => item.id).filter(id => id !== undefined) as number[];
+
+          //STUB -  all ids spread", ...allIds ,,,"all ids", allIds
+          if (!environment.production && environment.debug) {
+            console.log("all ids spread", ...allIds);
+            console.log("all ids", allIds);
           }
-        } else if (this.objectItems.length) {
+          this.maxServerIdOnLoad = allIds.length > 0 ? Math.max(...allIds) : 0;
+          //STUB  "maxIdNumber", this.maxServerIdOnLoad
+          if (!environment.production && environment.debug) {
+            console.log("maxIdNumber", this.maxServerIdOnLoad);
+          }
+        }
+
+        if (this.objectItems.length) {
           // Ak nebola vybraná žiadna položka (prvé načítanie)
           this.selectedItem = this.objectItems[0];
           this.initForm(this.selectedItem);
+
+        } else {
+          //STUB  'Niesu vybraté žiadne plány
+          if (!environment.production && environment.debug) { console.log('Niesu vybraté žiadne plány'); }
+
+          this.notify.showError('Niesu vybraté žiadne plány');
         }
 
         this.isLoading = false;
       },
       error: (err) => {
-        console.error(err);
-        this.errorMessage = 'Nepodarilo sa načítať dáta';
+
+        //STUB  console.error('Chyba z API:', err); 
+        if (!environment.production && environment.debug) { console.error('Chyba z API:', err); }
+        this.notify.showError(err.error?.message || 'Nepodarilo sa načítať dáta');
         this.isLoading = false;
+
       },
     });
+
+
   }
-
-  // V ProductPlanComponent.ts
-
-  /** 🔹 Inicializácia formulára */
+  // #endregion
+  //----------------------------------------------------------------------------
+  // #region  initForm funkcia / 
+  //ANCHOR - initForm funkcia
   initForm(item?: ProductPlanInterface) {
+
+    const isNewPlan = item?.id === undefined || item?.id === null;
+
     this.itemForm = this.fb.group({
       id: [item?.id ?? null],
-      plan_number: [{ value: item?.plan_number ?? '', disabled: true }],
-      plan_type: [{ value: item?.plan_type ?? '', disabled: true }],
+      plan_number: [{ value: item?.plan_number ?? '', disabled: !isNewPlan }],
+      plan_type: [{ value: item?.plan_type ?? '', disabled: !isNewPlan }],
       start_date: [item?.start_date ?? '', Validators.required],
       end_date: [item?.end_date ?? '', Validators.required],
       items: this.fb.array(
@@ -186,12 +220,28 @@ export class ProductPlanComponent implements OnInit {
             id: [i.id ?? null],
             product: [{ value: i.product ?? '', disabled: false }],
             // Ak API vracia i.product_id (kód), použite ho. Ak nie, bude prázdne.
-            product_id: [{ value: i.product_id ?? '', disabled: false }],
+            product_id: [
+              i.product_id ?? '',
+
+              [
+                Validators.required,
+                codeValidator(this.notify),
+
+              ]
+            ],
 
             // 🚨 KRITICKÁ ZMENA: Odstránené disabled: true, aby sa pole aktualizovalo cez patchValue
             product_name: [{ value: i.product_name ?? '', disabled: false }],
 
-            planned_quantity: [i.planned_quantity ?? 0, [Validators.required, Validators.min(1)]],
+            planned_quantity: [
+              i.planned_quantity ?? 0,
+              [
+                Validators.required,
+                integerValidatorWithNotify(this.notify),
+                Validators.min(1)
+              ]
+            ],
+
             planned_date: [i.planned_date ?? '', Validators.required],
             status: [i.status ?? 'pending', Validators.required],
             transfered_pcs: [{ value: i.transfered_pcs ?? 0, disabled: true }],
@@ -210,149 +260,112 @@ export class ProductPlanComponent implements OnInit {
       ),
     });
 
-    // =========================================================================
-    // 🚨 KĽÚČOVÁ ZMENA: Spustenie Live Search pre existujúce položky
-    // =========================================================================
 
-    // Zabezpečí, že každý riadok formulára začne sledovať zmeny v inpute product_id
     if (this.itemsFormArray.length > 0) {
       this.itemsFormArray.controls.forEach((itemGroup: FormGroup, index: number) => {
         this.setupLiveSearchForItem(itemGroup, index);
       });
-      console.log(`✅ Live Search obsluha zmien spustená pre ${this.itemsFormArray.length} riadkov.`);
+
+      //STUB - ✅ Live Search obsluha zmien spustená pre ${this.itemsFormArray.length} riadkov.
+      if (!environment.production && environment.debug) { console.log(`✅ Live Search obsluha zmien spustená pre(pocet vyrobkov v sisteme) ${this.itemsFormArray.length} riadkov.`); }
     }
   }
 
+  // #endregion 
+
+  //----------------------------------------------------------------------------
+  //ANCHOR - get itemsFormArray() vlasnost
   /** 🔹 Getter pre položky plánu */
   get itemsFormArray(): FormArray<FormGroup> {
     return (this.itemForm?.get('items') as FormArray<FormGroup>) || new FormArray<FormGroup>([]);
   }
-
+  //ANCHOR - getIngredientsFormArray vlasnost
   getIngredientsFormArray(itemGroup: FormGroup): FormArray<FormGroup> {
     const control = itemGroup.get('ingredients_status');
     return control instanceof FormArray ? control : new FormArray<FormGroup>([]);
   }
 
+  //ANCHOR - toggleIngredients funkcia
   toggleIngredients(index: number) {
     this.isExpanded[index] = !this.isExpanded[index];
   }
 
+  //----------------------------------------------------------------------------
+  // #region  saveItem funkcia / 
+  //ANCHOR - saveItem funkcia
+  saveItem(item?: any) {
+    // 💡 KĽÚČOVÁ ZMENA: Pridaná kontrola 'this.isCreatingNewPlan'
+    if (this.suppressLiveSave || this.isCreatingNewPlan) {
+      console.log(`-- saveItem preskočené. suppressLiveSave: ${this.suppressLiveSave}, isCreatingNewPlan: ${this.isCreatingNewPlan}`, item);
+      return;
+    }
+    console.trace('🔥 saveItem() SPUSTENÉ');
 
-  /** 🔹 Hlavná metóda na uloženie Plánu a všetkých Položiek (nové/zmenené). */
-  saveItem() {
+    // Kontrola platnosti celého formulára
     if (!this.itemForm?.valid) {
-      this.notify.notify('Formulár nie je platný', 'warn');
-      // Použitie logiky na zobrazenie chýb pre nevalidné pole (napr. this.itemForm.markAllAsTouched())
+      this.notify.notify('Formulár nie je platný. Prosím, opravte chyby.', 'warn');
       return;
     }
 
     const formValue = this.itemForm.getRawValue();
+    const planId = formValue.id;
 
+    // Ak chýba ID, ide o NOVÝ PLÁN (POST)
+    if (planId === null || planId === undefined) {
+      this.saveNewPlan(formValue);
+      return;
+    }
     // 1. Príprava payloadu pre HLAVNÝ PLÁN (PATCH)
     const planPayload: Partial<ProductPlanInterface> = {};
     const planStartDateControl = this.itemForm.get('start_date');
     const planEndDateControl = this.itemForm.get('end_date');
 
+    // Kontrola, či sa zmenili dátumy plánu
     if (planStartDateControl?.dirty) {
-      // Predpokladáme, že formValue.start_date je už string dátum
       planPayload.start_date = new Date(formValue.start_date).toISOString().slice(0, 10);
     }
     if (planEndDateControl?.dirty) {
       planPayload.end_date = new Date(formValue.end_date).toISOString().slice(0, 10);
     }
 
-    // 2. Volanie pre HLAVNÝ PLÁN
+    // 2. Definícia volania pre HLAVNÝ PLÁN (bude spustená v subscribe)
     const planRequest$: Observable<ProductPlanInterface | null> =
       Object.keys(planPayload).length > 0
         ? this.productPlanService.updatePlan(formValue.id, planPayload)
-        : of(null);
+        : of(null); // Ak nie sú zmeny, vraciame prázdny Observable
 
-    // 3. Príprava zoznamu ZMENENÝCH / NOVÝCH POLOŽIEK
 
-    // Zoznam pre existujúce položky, ktoré sa menia (PATCH)
-    const changedItems: Partial<ProductPlanProductsInterface>[] = [];
 
-    // Zoznam pre nové položky (POST)
-    const newItemsToProcess: Partial<ProductPlanProductsInterface>[] = [];
-
-    // Kľúče, ktoré sa môžu meniť/odosielať (vrátane 'product' po zmene cez Live Search)
-    const updateableKeys = ['planned_quantity', 'planned_date', 'status', 'product'];
-
-    this.itemsFormArray.controls.forEach((itemGroup: FormGroup) => {
-      const itemId = itemGroup.get('id')?.value;
-      // Rozpoznáme nové položky na základe dočasného ID
-      const isNewItem = itemId > (this.nextAvailableTempId - 1);
-
-      // ------------------------------------
-      // A. NOVÁ POLOŽKA (POST)
-      // ------------------------------------
-      if (isNewItem) {
-        if (!itemGroup.valid) {
-          this.notify.notify(`Nová položka s dočasným ID ${itemId} nie je platná.`, 'error');
-          return; // Preskočiť neplatnú položku
-        }
-
-        const fullPayload = itemGroup.getRawValue();
-
-        // 🚨 KĽÚČOVÉ KROKY: Vyčistenie payloadu pre POST
-        delete fullPayload.id; // Odstránime dočasné ID
-        delete fullPayload.product_id; // 🚨 ODSTRÁNENIE UI POĽA PRE VYHĽADÁVANIE
-
-        // Formátovanie dátumu, ak je potrebné
-        if (fullPayload.planned_date) {
-          fullPayload.planned_date = new Date(fullPayload.planned_date).toISOString().slice(0, 10);
-        }
-
-        // Nová položka ide do zoznamu na POST
-        newItemsToProcess.push(fullPayload as Partial<ProductPlanProductsInterface>);
-
-        // ------------------------------------
-        // B. EXISTUJÚCA POLOŽKA (PATCH/UPDATE) - Pôvodná Logika zachovaná
-        // ------------------------------------
-      } else if (itemGroup.dirty) {
-
-        // Základný payload s ID
-        const itemPayload: Partial<ProductPlanProductsInterface> = {
-          id: itemId,
-        };
-
-        let isItemDirty = false;
-
-        // Filtrujeme len zmenené a povolené polia
-        updateableKeys.forEach(key => {
-          const control = itemGroup.get(key);
-
-          if (control && control.dirty) {
-            (itemPayload as any)[key] = control.value;
-            isItemDirty = true;
-          }
-        });
-
-        // 🚨 UI pole product_id NEPOSIELAME. Ak je dirty, znamená to zmenu 'product' ID, 
-        // ktoré je už zahrnuté vďaka 'product' v updateableKeys.
-
-        if (isItemDirty) {
-          changedItems.push(itemPayload);
-        }
-      }
-    });
+    // 3. Rozdelenie položiek na NOVÉ a ZMENENÉ
+    // 🚨 Správna deštrukturalizácia po implementácii fixu
+    const { newItemsToProcess, changedItems, hasInvalidNewItems } = this.separateItems();
 
     // 4. Reťazenie požiadaviek (Plán -> Položky)
     planRequest$.subscribe({
       next: () => {
-        const allItemsToProcess = newItemsToProcess.length + changedItems.length;
+        // A. Sú prioritne NOVÉ položky?
+        if (newItemsToProcess.length > 0) {
+          // Spusti POST volania pre nové + následné PATCH pre zmenené
+          this.saveNewItems(newItemsToProcess, changedItems);
 
-        if (allItemsToProcess > 0) {
-          // Zavoláme funkciu, ktorá spracuje POST aj PATCH
-          this.handleItemsUpdate(newItemsToProcess, changedItems);
+          // B. Sú len ZMENENÉ položky?
+        } else if (changedItems.length > 0) {
+          // Spusti len PATCH volania
+          this.updateChangedItems(changedItems);
 
+          // C. Uložil sa len plán (dátumy) a položky sú bezo zmeny?
         } else if (Object.keys(planPayload).length > 0) {
-          // Uložil sa len plán
           this.notify.notify('Plán bol úspešne uložený, položky bezo zmeny.');
           this.itemForm?.markAsPristine();
           this.loadAllItems();
+
+          // D. Boli zistené neplatné položky? (FIX MÄTÚCEJ SPRÁVY)
+        } else if (hasInvalidNewItems) {
+          // V tomto bode už bola zobrazená notifikácia v separateItems()
+          console.log('🛑 Ukladanie zrušené: Boli nájdené neplatné nové položky. Nebude zobrazená všeobecná chyba.');
+
+          // E. Skutočne žiadne zmeny
         } else {
-          // Žiadna zmena
           this.notify.notify('Neboli zistené žiadne zmeny na uloženie.', 'info');
         }
       },
@@ -362,105 +375,342 @@ export class ProductPlanComponent implements OnInit {
       },
     });
   }
-  // V ProductPlanComponent.ts
+  itemFormItems: ProductPlanInterface['items'] = [];
+  saveAllItems() {
+    this.itemFormItems.forEach((item: ProductPlanInterface['items'][number]) => this.saveItem(item));
+  }
+  //#endregion
 
-  /**
-   * 🔹 Hromadné spracovanie ukladania položiek: POST pre nové, PATCH pre zmenené.
-   */
-  private handleItemsUpdate(
+  //----------------------------------------------------------------------------
+  // #region  loadAllItemsProduct() funkcia
+  //ANCHOR - createNewPlan() funkcia
+  isCreatingNewPlan = false;
+  suppressLiveSave = false;
+  isFormDirty(): boolean {
+    return this.itemForm?.dirty || false;
+  }
+
+  async createNewPlan() {
+    // 🔹 Ak je formulár dirty, spýtať sa užívateľa
+    if (this.isFormDirty()) {
+      const confirmSave = await this.notify.confirm(
+        'Máte neuložené zmeny. Chcete ich uložiť pred vytvorením nového plánu?'
+      );
+
+      if (confirmSave) {
+        this.saveItem();
+      } else {
+        this.notify.notify('Zmeny ignorované, pokračujeme s novým plánom.')
+
+        //STUB  'Zmeny ignorované, pokračujeme s novým plánom.'
+        if (!environment.production && environment.debug) { console.log('Zmeny ignorované, pokračujeme s novým plánom.'); }
+
+      }
+    }
+
+    this.isCreatingNewPlan = true;
+    this.suppressLiveSave = true;
+    // 💡 VÝPOČET DEFAULTNÝCH DÁTUMOV
+    const today = new Date();
+
+    // Začiatok mesiaca (1. deň, 00:00:00)
+    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+
+    // Koniec mesiaca (posledný deň, 23:59:59.999)
+    // Nastavíme na 0. deň nasledujúceho mesiaca
+    const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+
+    // Formátovanie na YYYY-MM-DD
+    const formatDate = (date: Date): string => date.toISOString().slice(0, 10);
+    // 🔹 Default hodnoty nového plánu
+    const newPlanDefaults: ProductPlanInterface = {
+      is_serialized: false,
+      plan_number: 'NOVÝ PLÁN',
+      plan_type: 'monthly',
+      start_date: formatDate(firstDayOfMonth), // Prvý deň aktuálneho mesiaca
+      end_date: formatDate(lastDayOfMonth),
+      items: [],
+      created_at: null,
+      updated_at: null
+    };
+
+    // 🔹 Inicializujeme formulár. 
+    // AK má initForm v sebe valueChanges, TOTO spustí event.
+    this.initForm(newPlanDefaults);
+    this.selectedItem = newPlanDefaults;
+
+
+
+    // 🔹 Označíme formulár ako čistý, čo je kľúčové
+    this.itemForm?.markAsPristine();
+
+    // 💡 KĽÚČOVÁ ZMENA 2: Odblokujeme live save až po krátkom oneskorení
+    // Tým sa zabezpečí, že Angular spracuje všetky inicializačné zmeny (patchValue atď.)
+    // bez toho, aby spustil valueChanges.
+    setTimeout(() => {
+      this.suppressLiveSave = false;
+      this.isCreatingNewPlan = false;
+      //STUB  ✅ Live Save a isCreatingNewPlan sú znova aktívne.
+      if (!environment.production && environment.debug) { console.log('✅ Live Save a isCreatingNewPlan sú znova aktívne.'); }
+
+
+    }, 0);
+
+    //STUB  🔥 createNewPlan() SPUSTENÉ', 
+    if (!environment.production && environment.debug) { console.log('🔥 createNewPlan() SPUSTENÉ', newPlanDefaults); }
+
+  }
+
+  //#endregion
+
+  //----------------------------------------------------------------------------
+  // #region  separateItems funkcia
+  //ANCHOR - separateItems funkcia
+  private separateItems(): {
+    //REVIEW - newItemsToProcess-Post
+    newItemsToProcess: Partial<ProductPlanProductsInterface>[],
+    //REVIEW - changedItems-patch
+    changedItems: Partial<ProductPlanInterface>[],
+    //REVIEW - hasInvalidNewItems
+    hasInvalidNewItems: boolean
+  } {
+    const newItemsToProcess: Partial<ProductPlanProductsInterface>[] = [];
+    const changedItems: Partial<ProductPlanInterface>[] = [];
+    let hasInvalidNewItems = false;
+
+    //STUB  🎆 separateItems called'
+    if (!environment.production && environment.debug) { console.trace('🎆 separateItems called') }
+
+
+
+    // ⛔ BLOKÁCIA POČAS CREATE NEW PLAN
+    if (this.isCreatingNewPlan) {
+      //STUB  ⛔ separateItems() preskočené — prebieha createNewPlan()"
+      if (!environment.production && environment.debug) { console.warn("⛔ separateItems() preskočené — prebieha createNewPlan()"); }
+      return {
+        newItemsToProcess: [],
+        changedItems: [],
+        hasInvalidNewItems: false
+      };
+    }
+
+    // Zoznam kľúčov, ktoré sa smú meniť a odosielať na PATCH
+    const updateableKeys = ['planned_quantity', 'planned_date', 'status', 'product'];
+
+    this.itemsFormArray.controls.forEach((itemGroup: FormGroup) => {
+      const itemId = itemGroup.get('id')?.value;
+      const isNewItem = itemId > this.maxServerIdOnLoadProduct;
+
+      // 🔍 KONTROLNÝ LOG
+      console.log(`-- Položka ID: ${itemId}. Max Server ID pri Load: ${this.maxServerIdOnLoadProduct}. Is New: ${isNewItem}. Dirty: ${itemGroup.dirty}`);
+
+      // ------------------------------------
+      // A. NOVÁ POLOŽKA (POST)
+      // ------------------------------------
+      if (isNewItem) {
+        if (!itemGroup.valid) {
+          this.notify.notify(`Nová položka s dočasným ID ${itemId} nie je platná! Vyplňte Produkt a Množstvo.`, 'error');
+          hasInvalidNewItems = true;
+          return;
+        }
+
+        const fullPayload = itemGroup.getRawValue();
+
+        // 💡 Čistenie payloadu pre POST
+        delete fullPayload.id;
+        delete fullPayload.product_id;
+        delete fullPayload.product_name;
+        delete fullPayload.production_card;
+        delete fullPayload.transfered_pcs;
+
+        // 💡 Formátovanie dátumu
+        if (fullPayload.planned_date) {
+          fullPayload.planned_date = new Date(fullPayload.planned_date).toISOString().slice(0, 10);
+        }
+
+        newItemsToProcess.push(fullPayload as Partial<ProductPlanProductsInterface>);
+
+        console.log("new items to process", newItemsToProcess,);
+      }
+
+      // ------------------------------------
+      // B. EXISTUJÚCA POLOŽKA (PATCH/UPDATE)
+      // ------------------------------------
+      else if (itemGroup.dirty) {
+        console.log(`-- Položka ID: ${itemId} smeruje do PATCH bloku.`);
+
+        const itemPayload: Partial<ProductPlanInterface> = { id: itemId };
+        let isItemDirty = false;
+
+        // Iterujeme len cez kľúče, ktoré vieme aktualizovať
+        updateableKeys.forEach(key => {
+          const control = itemGroup.get(key);
+
+          if (control && control.dirty) {
+            let value = control.value;
+
+            if (key === 'planned_date' && value) {
+              value = new Date(value).toISOString().slice(0, 10);
+            }
+
+            (itemPayload as any)[key] = value;
+            isItemDirty = true;
+          }
+        });
+
+        if (isItemDirty) {
+          changedItems.push(itemPayload);
+        }
+      }
+    });
+
+    return { newItemsToProcess, changedItems, hasInvalidNewItems };
+  }
+  //#endregion
+
+
+  //----------------------------------------------------------------------------
+  // #region  saveNewItems() funkcia
+  //ANCHOR - saveNewItems() funkcia
+  private saveNewItems(
     newItems: Partial<ProductPlanProductsInterface>[],
     changedItems: Partial<ProductPlanProductsInterface>[]
-  ) {
-    // ... (implementácia s forkJoin pre POST a PATCH volania) ...
-    const requests: Observable<any>[] = [];
-
-    newItems.forEach(item => {
-      requests.push(this.productPlanService.createItemPlan(item));
-    });
-
-    changedItems.forEach(item => {
-      if (item.id !== undefined && item.id !== null) {
-        requests.push(this.productPlanService.updateItemPlan(item.id, item));
-      }
-    });
-
-    forkJoin(requests).subscribe({
-      next: () => {
-        this.notify.notify('Všetky položky boli úspešne uložené/aktualizované.', 'success');
-        this.itemForm?.markAsPristine();
-        this.loadAllItems(); // Načítanie dát
-      },
-      error: (err) => {
-        this.notify.notify('Chyba pri ukladaní položiek. Skontrolujte konzolu.', 'error');
-        console.error(err);
-      },
-    });
-  }
-  private updateProductItems(items: ProductPlanProductsInterface[]) {
-    const updateRequests: Observable<any>[] = [];
-
-    items.forEach((item, index) => {
-      if (!item.id) {
-        console.warn(`Položka na indexe ${index} nemá ID a bola preskočená pri aktualizácii.`);
-        return;
-      }
-
-      // 🚀 KĽÚČOVÁ ZMENA: Správne explicitné typovanie pre bodkovú notáciu
-      const productUpdate: Partial<ProductPlanProductsInterface> = {};
-
-      // --- Kontroly zmenených polí ---
-
-      // Riadok 278: planned_quantity
-      if (item.planned_quantity !== undefined) {
-        productUpdate.planned_quantity = item.planned_quantity; // Chyba TS4111 je opravená
-      }
-      if (item.planned_date !== undefined) {
-        // Formátovanie, len ak je pole prítomné (zmenené)
-        productUpdate.planned_date = new Date(item.planned_date).toISOString().slice(0, 10);
-      }
-      if (item.status !== undefined) {
-        productUpdate.status = item.status;
-      }
-
-      console.log(`📦 Item ID ${item.id} payload (pre PATCH):`, JSON.stringify(productUpdate));
-
-      updateRequests.push(this.productPlanService.updateItemPlan(item.id, productUpdate));
-    });
-
-    if (updateRequests.length === 0) {
-      this.notify.notify('Neboli zistené žiadne zmeny položiek na odoslanie', 'info');
+  ): void {
+    if (newItems.length === 0) {
+      // Ak nie sú nové položky, rovno aktualizujeme zmenené
+      this.updateChangedItems(changedItems);
       return;
     }
 
-    // Spustenie VŠETKÝCH PATCH požiadaviek naraz
-    // V ProductPlanComponent.ts, vnútri funkcie updateProductItems()
+    console.log('🚀 POST PAYLOAD (Nové položky):', newItems);
 
-    forkJoin(updateRequests).subscribe({
-      next: () => {
-        this.notify.notify('Zmeny boli úspešne uložené');
-        this.itemForm?.markAsPristine();
-        this.loadAllItems();
+    // Vytvoríme pole POST požiadaviek pre všetky nové položky
+    const postRequests = newItems.map(item => this.productPlanService.createItemPlan(item));
+
+    // Spustíme všetky POST naraz
+    forkJoin(postRequests).subscribe({
+      next: (createdItems: ProductPlanProductsInterface[]) => {
+        console.log('✅ Nové položky úspešne vytvorené na serveri:', createdItems);
+
+        // Každá nová položka dostane ID zo servera
+        createdItems.forEach((item, idx) => {
+          const formItem = this.itemsFormArray.at(idx);
+          if (formItem) {
+            formItem.patchValue({ id: item.id }); // aktualizujeme ID
+            formItem.markAsPristine();           // označíme ako čisté
+          }
+        });
+
+        this.notify.notify(`${createdItems.length} nových položiek bolo úspešne uložených`, 'success');
+
+        // Po úspechu POST spustíme aktualizáciu existujúcich položiek (PATCH)
+        if (changedItems.length > 0) {
+          this.updateChangedItems(changedItems);
+        } else {
+          // Ak nie sú žiadne zmeny, refresh dát
+          this.loadAllItems();
+        }
       },
       error: (err) => {
-        console.error('❌ Chyba pri ukladaní produktov', err);
+        console.error('❌ Chyba pri ukladaní nových položiek:', err);
+        let errorMessage = 'Nastala neznáma chyba pri ukladaní položiek.';
 
-        let errorMessage = 'Nastala neočakávaná chyba pri ukladaní produktov.';
-
-        // 🚀 ÚPRAVA: Ak je chyba 400, pokúsime sa získať špecifickú správu z Django
-        if (err.status === 400 && err.error && err.error.detail) {
-          // Zachytenie tvojho {"detail": "Nie je možné meniť položku..."}
-          errorMessage = err.error.detail;
-        } else if (err.message) {
-          // Pre iné typy chýb (napr. sieťové chyby)
-          errorMessage = err.message;
+        if (err.error) {
+          const errorBody = err.error;
+          if (errorBody.non_field_errors) {
+            errorMessage = errorBody.non_field_errors.join('; ');
+          } else if (errorBody.detail) {
+            errorMessage = errorBody.detail;
+          } else if (Object.keys(errorBody).length > 0) {
+            const fieldName = Object.keys(errorBody)[0];
+            const fieldErrors = errorBody[fieldName];
+            errorMessage = `Chyba v poli '${fieldName}': ${fieldErrors[0]}`;
+          }
+        } else {
+          errorMessage = `Chyba POST (${err.status}): ${err.statusText || 'Neznámy problém siete.'}`;
         }
 
-        // Zobrazenie zisteného chybového hlásenia
-        this.notify.notify(errorMessage, 'warn');
-      },
+        this.notify.showError(errorMessage);
+      }
     });
   }
+  //#endregion
 
+  private updateChangedItems(changedItems: Partial<ProductPlanProductsInterface>[]): void {
+
+    // 0. Predbežná kontrola: Ak nie sú žiadne zmeny, skončíme
+    if (changedItems.length === 0) {
+      console.warn('Neboli nájdené žiadne zmenené položky na odoslanie.');
+      this.itemForm?.markAsPristine();
+      return;
+    }
+
+    console.log('PATCHING ITEMS (na odoslanie):', changedItems);
+
+    // Vytvoríme pole Observable pre všetky PATCH požiadavky
+    const patchRequests = changedItems.map(item => {
+
+      // 🚨 KONTROLA ID: Uistíme sa, že položka na aktualizáciu má ID
+      if (!item.id) {
+        // Táto položka by nemala byť v changedItems, ak ide o PATCH.
+        // Ak k tomu dôjde, je to chyba logiky v predchádzajúcej metóde.
+        console.error("❌ CHYBA LOGIKY: Položka určená na PATCH nemá definované 'id'!", item);
+        throw new Error("Aktualizačná položka musí mať ID.");
+      }
+
+      // Volanie PATCH zo služby
+      return this.productPlanService.updateItemPlan(item.id, item);
+    });
+
+    // forkJoin zabezpečí, že sa všetky aktualizácie spustia paralelne a čaká na dokončenie všetkých
+    forkJoin(patchRequests).subscribe({
+      next: () => {
+        // ✅ ÚSPECH: Ak všetky požiadavky prejdú
+        this.notify.showSuccess(`Úspešne aktualizovaných ${changedItems.length} existujúcich položiek.`);
+        this.itemForm?.markAsPristine(); // Označenie formulára ako čistého
+        this.loadAllItems(); // Pre-načítanie dát zo servera
+      },
+      error: (err) => {
+        // ❌ CHYBA: Ak zlyhá akákoľvek požiadavka v rámci forkJoin
+
+        let errorMessage = 'Nastala neznáma chyba pri aktualizácii položiek.';
+
+        if (err.error) {
+          const errorBody = err.error;
+
+          // 1. CHYBA NEPOĽA (Uzamknutá položka, Logika z Serializeru)
+          if (errorBody.non_field_errors && errorBody.non_field_errors.length > 0) {
+            errorMessage = errorBody.non_field_errors.join('; ');
+          }
+          // 2. Všeobecná chyba (Detail - Oprávnenia, Not Found, atď.)
+          else if (errorBody.detail) {
+            errorMessage = errorBody.detail;
+          }
+          // 3. Chyba KONKRÉTNEHO POĽA (Validácia dát)
+          else if (Object.keys(errorBody).length > 0) {
+            // Zoberieme prvú chybu z prvého poľa
+            const fieldName = Object.keys(errorBody)[0];
+            const fieldErrors = errorBody[fieldName];
+
+            if (Array.isArray(fieldErrors) && fieldErrors.length > 0) {
+              // Formátujeme správu pre používateľa
+              errorMessage = `Chyba v poli '${fieldName}': ${fieldErrors[0]}`;
+            }
+          }
+
+          console.error('❌ DETAILED DRF PATCH ERROR:', errorBody);
+
+        } else {
+          // Chyby siete (500, timeout, atď. bez detailného JSON tela)
+          errorMessage = `Chyba PATCH (${err.status}): ${err.statusText || 'Neznámy problém siete.'}`;
+          console.error('❌ PATCH Chyba pri ukladaní:', err);
+        }
+
+        // 📢 KĽÚČOVÉ: Zobrazíme extrahovanú chybovú správu
+        this.notify.showError(errorMessage);
+      }
+    });
+  }
 
   /** 🔹 Zrušenie zmien */
   cancelEdit() {
@@ -472,6 +722,7 @@ export class ProductPlanComponent implements OnInit {
 
   /** 🔹 Výber iného plánu s potvrdením */
   async selectItems(item: ProductPlanInterface) {
+    console.log("⚠️ selectItems() SPUSTENÉ", { item });
     if (this.itemForm?.dirty) {
       const ok = await this.notify.confirm('Máte neuložené zmeny. Chcete ich uložiť?');
       if (ok) {
@@ -541,41 +792,45 @@ export class ProductPlanComponent implements OnInit {
 
 
   // V ProductPlanComponent.ts
-
-  private createItemFormGroup(item?: ProductPlanItemForm): FormGroup {
+  private createItemFormGroup(item?: Partial<ProductPlanItemForm>): FormGroup {
     let itemId = item?.id || null;
+
     if (itemId === null) {
-      itemId = this.nextAvailableTempId++;
+      // 💡 KĽÚČOVÁ OPRAVA: Použijeme aktuálne ID, AŽ POTOM ho navýšime.
+      itemId = this.nextAvailableTempId;
+      this.nextAvailableTempId++;
     }
 
-    // 🚀 Teraz používame ProductPlanItemForm, ktorý obsahuje VŠETKY polia + product_id
-    return this.fb.group<{ [key in keyof ProductPlanItemForm]: any }>({
 
-      // 🔹 VŠETKY POLIA Z ProductPlanProductsInterface (Tieto CHÝBALI v chybovej správe!)
+    // 🚨 Log potvrdzuje, že ID je správne nastavené
+    console.log(`🆕 Vytváram nový FormGroup: Dočasné ID: ${itemId}, Next Temp ID pre ďalšiu: ${this.nextAvailableTempId}`);
+
+    // 🚀 Definícia FormGroup (s predpokladanými kontrolkami)
+    return this.fb.group<{ [key in keyof ProductPlanItemForm]: any }>({
       id: [itemId],
       production_plan: [item?.production_plan || this.selectedItem?.id, Validators.required],
       product: [item?.product || null, Validators.required],
-
-      // 🚨 TOTO SÚ TIE CHÝBAJÚCE POLIA, KTORÉ MUSÍTE PRIDAŤ:
-      product_name: [item?.product_name || null], // <-- CHÝBALO
-      planned_quantity: [item?.planned_quantity || 1, [Validators.required, Validators.min(1)]], // <-- CHÝBALO
-      planned_date: [item?.planned_date || new Date().toISOString().slice(0, 10), Validators.required], // <-- CHÝBALO
-      status: [item?.status || 'pending', Validators.required], // <-- CHÝBALO
+      product_name: [item?.product_name || null],
+      planned_quantity: [item?.planned_quantity || 1, [Validators.required, Validators.min(1)]],
+      planned_date: [item?.planned_date || new Date().toISOString().slice(0, 10), Validators.required],
+      status: [item?.status || 'pending', Validators.required],
       production_card: [item?.production_card || null],
-      transfered_pcs: [item?.transfered_pcs || 0], // <-- CHÝBALO
-
-      // 🟡 UI POLE (ktoré rozširuje formulár a je v ProductPlanItemForm)
-      product_id: [item?.product_name ? item.product_id : ''], // Ak načítavame, ukážeme kód, inak prázdne
-
+      transfered_pcs: [item?.transfered_pcs || 0],
+      // ... (predpokladané UI pole, ak ho používate pre vyhľadávanie)
+      product_id: [item?.product_name ? item.product_id : ''],
     }) as FormGroup;
   }
 
-  /** 🔹 Pridá novú položku do itemsFormArray a nastaví fokus. */
-  addNewItem() {
+
+
+  addNewItem(runLiveSearch = true) {
     if (!this.selectedItem || !this.itemForm) {
       this.notify.notify('Vyberte najprv plán, do ktorého chcete položku pridať.', 'warn');
       return;
     }
+
+    // 🔹 Zakážeme live save ešte pred vytvorením riadku
+    this.suppressLiveSave = true;
 
     // 1. Vytvor nový, prázdny FormGroup
     const newItemGroup = this.createItemFormGroup();
@@ -583,52 +838,77 @@ export class ProductPlanComponent implements OnInit {
     // 2. Pridaj ho na koniec FormArray
     this.itemsFormArray.push(newItemGroup);
 
-    // 3. Nastav index na poslednú položku (voliteľné, ak používaš selectedItemIndex)
+    // 3. Nastav index na poslednú položku
     const newIndex = this.itemsFormArray.length - 1;
     this.selectedItemIndex = newIndex;
 
-    // 🚨 CHÝBAJÚCI KROK: Spustenie Live Search pre nový riadok
-    this.setupLiveSearchForItem(newItemGroup, newIndex);
+    // 4. Spustíme live search pre nový riadok iba ak runLiveSearch = true
+    if (runLiveSearch) {
+      this.setupLiveSearchForItem(newItemGroup, newIndex);
+    }
+
     this.notify.notify(`Bol pridaný nový riadok s dočasným ID: ${newItemGroup.get('id')?.value}.`, 'info');
 
+    // 🔹 Odblokujeme live save až po dokončení pridania
+    this.suppressLiveSave = false;
 
-
-    // Voliteľné: Zroluj pohľad na spodok formulára, kde je nový riadok.
+    // Voliteľné: scroll na spodok
     setTimeout(() => {
       document.querySelector('.product-item:last-child')?.scrollIntoView({ behavior: 'smooth' });
     }, 0);
   }
-  // V ProductPlanComponent.ts
 
+
+  ngOnDestroy(): void {
+    this.liveSearchSub?.unsubscribe();
+  }
+
+  //----------------------------------------------------------------------------
+  // #region setupLiveSearchForItem() funkcia / 
+  //ANCHOR - setupLiveSearchForItem funkcia
+  private liveSearchSub?: Subscription;
   private setupLiveSearchForItem(itemGroup: FormGroup, index: number): void {
     // Používame pole 'product_id' pre UI vyhľadávanie
     const searchControl = itemGroup.get('product_id');
 
     // 💡 Nastavíme debounce pre zníženie frekvencie API volaní
-    const sub = searchControl?.valueChanges.pipe(
+    this.liveSearchSub = searchControl?.valueChanges.pipe(
       debounceTime(300), // Počká 300ms po poslednom stlačení klávesu
       distinctUntilChanged(), // Spustí sa len, ak sa hodnota naozaj zmenila
 
       // Zabezpečí, že neodosielame prázdny reťazec
-      // filter((query: string) => query?.length > 2),
+      filter((query: string) => query?.length > 3),
 
       // Volanie servisnej metódy s query
       switchMap((query: string) => {
-        console.log(`🔎 Spúšťam API Live Search pre query: ${query}`); // <--- TOTO je to nové
+        //STUB  Spúšťam API Live Search pre query
+        if (!environment.production && environment.debug) { console.log(`🔎 Spúšťam API Live Search pre query: ${query}`); }
+
         return this.productPlanService.loadAllProductForPlansSearch(query);
       }),
     ).subscribe((results: ProductPlanItemsInterface[]) => {
-      console.log('➡️ API vrátilo výsledky (results):', results);
+
+      //STUB  ➡️ API vrátilo výsledky (results):', results);
+      if (!environment.production && environment.debug) { console.log('➡️ API vrátilo výsledky (results):', results); }
+
       const enteredCode = itemGroup.get('product_id')?.value;
+
+      //STUB  Vstupný kód:', enteredCode;
+      if (!environment.production && environment.debug) { console.log('Vstupný kód:', enteredCode); }
+      //STUB  'ItemGroup:', itemGroup);
+      if (!environment.production && environment.debug) { console.log('ItemGroup:', itemGroup); }
 
       // Hľadáme produkt, ktorého product_id sa PRESNE zhoduje so zadaným kódom
       const foundProduct = results.find(
         p => p.product_id.toUpperCase() === enteredCode.toUpperCase()
       );
 
+
       if (foundProduct) {
-        // Našla sa presná zhoda
         this.selectProductAndClose(index, foundProduct);
+
+        //STUB  `Produkt ${foundProduct.product_id} bol presne nájdený a vybraný.`, 'success'
+        if (!environment.production && environment.debug) { console.log(`Produkt ${foundProduct.product_id} bol presne nájdený a vybraný.`, 'success'); }
         this.notify.notify(`Produkt ${foundProduct.product_id} bol presne nájdený a vybraný.`, 'success');
 
       } else if (results.length > 0) {
@@ -640,52 +920,270 @@ export class ProductPlanComponent implements OnInit {
         this.notify.notify('Produkt nebol nájdený.', 'warn');
       }
 
-      this.searchResultsMap.delete(index);
+
     });
 
-    // ⚠️ POZOR: Mali by ste zabezpečiť, že sa toto Observable odhlási pri zničení komponentu.
-    // Ak sa to neodhlasuje, môže to viesť k memory leaks.
   }
-
-  // V ProductPlanComponent.ts
-
-  /**
-   * 🔹 Spracuje výber produktu z výsledkov Live Search.
-   */
+  //#endregion
+  //----------------------------------------------------------------------------
+  // #region sselectProductAndClosefunkcia / 
+  //ANCHOR - selectProductAndClose funkcia
   selectProductAndClose(index: number, product: ProductPlanItemsInterface): void {
     const itemGroup = this.itemsFormArray.at(index) as FormGroup;
-    // ===================================================
-    // 💡 KONTROLA 1: Dáta prichádzajúce z Live Search (API)
-    // ===================================================
-    console.log(`✅ Vybraný produkt na indexe ${index}:`);
-    console.log('API (product.id):', product.id);
-    console.log('API (product.product_id):', product.product_id);
-    console.log('API (product.product_name):', product.product_name);
-    // Overte, že tieto hodnoty NIE SÚ undefined, null alebo prázdne!
+
+    // ❌ Zakážeme live save úplne
+    this.suppressLiveSave = true;
+
     itemGroup.patchValue({
       // 🟢 ID produktu z výsledkov ide do cieľového poľa 'product'
       product: product.id,
-
       // Kód produktu pre UI (zobrazenie v inpute a nadpise)
       product_id: product.product_id,
-
       // Ostatné detaily
       product_name: product.product_name,
       planned_quantity: 1,
 
-    });
-    // ===================================================
-    // 💡 KONTROLA 2: Hodnoty PO patchValue
-    // ===================================================
-    console.log('🔥 Hodnoty formulára po patchValue:');
-    console.log('Form product (ID pre server):', itemGroup.get('product')?.value);
-    console.log('Form product_id (Kód pre UI):', itemGroup.get('product_id')?.value);
-    console.log('Form product_name (Názov pre nadpis):', itemGroup.get('product_name')?.value);
+    }, { emitEvent: false });
 
-    // Zatvorí dropdown zoznam výsledkov a nastaví formulár ako zmenený
-    this.searchResultsMap.delete(index);
-    itemGroup.markAsDirty();
+    // Potrebujete označiť dotknuté polia ako dirty, aby sa odoslali pri manuálnom SAVE,
+    // ale NESMÚ sa odoslať v tomto momente!
+    itemGroup.get('product')?.markAsDirty();
+    itemGroup.get('product_id')?.markAsDirty();
+    itemGroup.get('product_name')?.markAsDirty();
+    itemGroup.get('planned_quantity')?.markAsDirty();
+    // itemGroup.markAsDirty();
     this.notify.notify(`Produkt ${product.product_id} bol nastavený.`, 'success');
+    setTimeout(() => { this.suppressLiveSave = false; }, 0);
+
   }
 
+  //#endregion
+
+
+  //----------------------------------------------------------------------------
+  // #region  onProductSelectedfunkcia / 
+  //ANCHOR -  onProductSelected funkcia
+  //REVIEW - editingProductIndex
+  // 🔥 Vždy bezpečne vráti FormArray (alebo vyhodí jasnú chybu pri vývoji)
+  get itemsArray(): FormArray {
+    const control = this.itemForm?.get('items');
+
+    // Ak FormArray neexistuje alebo nie je správneho typu
+    if (!control || !(control instanceof FormArray)) {
+
+      // 1️⃣ Vývojový režim: throw, aby sme chybu hneď videli
+      if (!environment.production) {
+        throw new Error("FormControl 'items' neexistuje alebo nie je FormArray.");
+      }
+
+      // 2️⃣ Produkcia: len upozornenie používateľovi
+      this.notify.notify("Niečo je zle s formulárom – kontaktujte podporu.", "error");
+
+      // Vrátime prázdny FormArray, aby aplikácia neskončila crashom
+      return new FormArray<any>([]);
+    }
+
+    return control;
+  }
+
+
+  // 🔥 Bezpečne vráti FormGroup pre daný riadok alebo null
+  getItemRow(index: number): FormGroup | null {
+    const row = this.itemsArray.at(index);
+    return row instanceof FormGroup ? row : null;
+  }
+
+  // 🔥 Tvoj nový úplne bezpečný event handler
+  editingProductIndex: number | null = null;
+
+  onProductSelected(product: ProductFromModal) {
+    console.log("onProductSelected spustené");
+
+    if (this.editingProductIndex === null) {
+      this.notify.notify("Žiadny riadok nie je vybraný na úpravu.", 'error');
+      return;
+    }
+
+    const row = this.getItemRow(this.editingProductIndex);
+
+    if (!row) {
+      this.notify.notify("Riadok na aktualizáciu sa nenašiel.", 'error');
+      return;
+    }
+
+    const productPayload = {
+      product: product.id,
+      product_id: product.product_id,
+      product_name: product.product_name,
+    };
+
+    // 🔥 Toto je teraz 100% bezpečné
+    row.patchValue(productPayload);
+    row.markAsDirty();
+
+    this.notify.notify(
+      `Produkt ${product.product_name} bol ZMENENÝ v riadku ${this.editingProductIndex + 1}.`,
+      'success'
+    );
+
+    this.editingProductIndex = null;
+    this.closeModal();
+  }
+  //#endregion
+
+
+  openModalForEdit(index: number) {
+    // 1. Uložíme index editovaného riadku. TOTO je to, čo chýbalo.
+    this.editingProductIndex = index;
+
+    // 2. Otvoríme modal.
+    this.showModal = true;
+
+    console.log(`Modal otvorený pre index: ${index}.`);
+  }
+
+
+  private saveNewPlan(formValue: any): void {
+
+
+    // 1. Získanie a čistenie položiek
+    const { newItemsToProcess, hasInvalidNewItems } = this.separateItemsForNewPlan();
+
+    if (hasInvalidNewItems) {
+      this.notify.notify('Uloženie bolo zrušené: Všetky položky musia byť platné.', 'error');
+      return;
+    }
+
+    // 2. Pripravíme Payload pre HLAVNÝ PLÁN (POST)
+    const planPostPayload: Partial<ProductPlanInterface> = {
+      // Iba dáta, ktoré server očakáva (start/end date)
+      start_date: new Date(formValue.start_date).toISOString().slice(0, 10),
+      end_date: new Date(formValue.end_date).toISOString().slice(0, 10),
+
+      // 🚨 KĽÚČOVÉ: Pridáme spracované položky
+      items: newItemsToProcess as any,
+
+      // Ak API očakáva aj tieto polia:
+      // plan_type: formValue.plan_type, 
+      // plan_number: formValue.plan_number,
+    };
+
+    // 3. Spustíme POST volanie
+    this.productPlanService.createPlan(planPostPayload).subscribe({
+      next: (newPlan: ProductPlanInterface) => {
+        this.notify.notify('✅ Nový plán a jeho položky boli úspešne vytvorené!', 'success');
+        this.itemForm?.markAsPristine();
+
+        this.loadAllItems();
+      },
+      error: (err) => {
+        console.error('❌ Chyba pri vytváraní nového plánu:', err);
+        this.notify.notify('Chyba pri vytváraní nového plánu. Skontrolujte konzolu.', 'error');
+      }
+    });
+  }
+
+
+  private separateItemsForNewPlan(): {
+    newItemsToProcess: Partial<any>[], // Používame any, pretože tu vyhadzujeme kľúče
+    hasInvalidNewItems: boolean
+  } {
+    const newItemsToProcess: Partial<any>[] = [];
+    let hasInvalidNewItems = false;
+
+    this.itemsFormArray.controls.forEach((itemGroup: FormGroup) => {
+      if (!itemGroup.valid) {
+        hasInvalidNewItems = true;
+        return;
+      }
+
+      const fullPayload = itemGroup.getRawValue();
+
+      // 🚨 KĽÚČOVÉ: Vyhadzujeme všetky polia, ktoré nastaví server alebo sú len pre UI
+      delete fullPayload.id;
+      delete fullPayload.product_id;
+      delete fullPayload.product_name;
+      delete fullPayload.production_card;
+      delete fullPayload.transfered_pcs;
+
+      // Zabezpečíme správny formát dátumu:
+      if (fullPayload.planned_date) {
+        fullPayload.planned_date = new Date(fullPayload.planned_date).toISOString().slice(0, 10);
+      }
+
+      newItemsToProcess.push(fullPayload);
+    });
+
+    return { newItemsToProcess, hasInvalidNewItems };
+  }
+
+  getItemClass(itemGroup: any): string {
+    // Získame hodnotu stavu priamo z formulárovej skupiny (FormControl)
+    const status = itemGroup.get('status')?.value;
+
+    switch (status) {
+      case 'pending':
+        return 'item-badge-pending';
+      case 'in_production':
+        return 'item-badge-processing'; // Použijeme existujúce farby
+      case 'partially completed':
+        return 'item-badge-partially';
+      case 'completed':
+        return 'item-badge-completed';
+      case 'canceled':
+        return 'item-badge-canceled';
+      default:
+        return '';
+    }
+  }
+
+
+  getRowClass(row: any): string {
+    const items = row.items;
+
+    // 1. Ošetrenie prázdneho poľa
+    if (!items || items.length === 0) {
+      return 'badge-no-items'; // Nová trieda pre prázdny plán
+    }
+
+    // 2. Kontrola prítomnosti stavov
+    // Používame some() na kontrolu, či je aspoň jeden takýto stav
+    const hasCanceled = items.some((item: any) => item.status === 'canceled');
+    const hasPending = items.some((item: any) => item.status === 'pending');
+    const hasInProduction = items.some((item: any) => item.status === 'in_production');
+    const hasPartiallyCompleted = items.some((item: any) => item.status === 'partially completed');
+
+    // 3. Kontrola dokončenia (všetky musia byť completed)
+    const allCompleted = items.every((item: any) => item.status === 'completed');
+
+    // 4. Aplikácia logiky (podľa klesajúcej priority)
+
+    // A. Ak je čokoľvek ZRUŠENÉ, celý plán má stav "Zrušený"
+    if (hasCanceled) {
+      return 'badge-canceled';
+    }
+
+    // B. Ak je čokoľvek VO VÝROBE (a nič nie je zrušené)
+    if (hasInProduction) {
+      return 'badge-processing'; // Používame pre in_production
+    }
+
+    // C. Ak čokoľvek ČAKÁ (a nič nie je zrušené/vo výrobe)
+    if (hasPending) {
+      return 'badge-pending';
+    }
+
+    // D. Ak je čokoľvek ČIASTOČNE PRENESENÉ
+    if (hasPartiallyCompleted) {
+      return 'badge-partially-completed';
+    }
+
+    // E. Ak sú VŠETKY položky Dokončené
+    if (allCompleted) {
+      return 'badge-completed';
+    }
+
+    // F. Ak sa sem dostaneme, je to neočakávaný/zmiešaný stav, napr. prázdny status
+    return 'badge-mixed-status';
+  }
 }

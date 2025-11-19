@@ -1,7 +1,7 @@
 export interface ProductPlanInterface {
-    is_serialized(is_serialized: any): boolean;
+    is_serialized: boolean;
 
-    id: number;
+    id?: number;
     plan_number: string;
     plan_type: 'monthly' | 'weekly';
     start_date: string;       // ISO dátum
@@ -24,14 +24,15 @@ export interface ProductPlanInterface {
         }[];
         transfered_pcs: number;
     }[];
-    created_at: string;       // ISO datetime
+    created_at: string | null
+
     created_by?: number;
     created_by_name?: string;
-    updated_at: string;       // ISO datetime
+    updated_at: string | null
     updated_by?: number;
     updated_by_name?: string;
-}
 
+}
 
 
 export interface ProductPlanItemsInterface {
@@ -62,8 +63,24 @@ export interface ProductPlanProductsInterface {
     status: 'pending' | 'in_production' | 'partially completed' | 'completed' | 'canceled';
     production_card?: any | null;
     transfered_pcs: number;
+    plan?: number;
 }
+
 
 export type ProductPlanItemForm = ProductPlanProductsInterface & {
     product_id: string | null; // ⬅️ Kód produktu (LEN pre UI a vyhľadávanie)
 };
+
+export interface ProductFromModal {
+    id: number;           // Primárne ID produktu
+    product_id: string;   // Kód produktu (napr. 'E003')
+    product_name: string; // Názov produktu
+    // Pridajte sem všetky ostatné polia, ktoré modal reálne vracia (napr. description, unit, atď.)
+}
+
+
+export interface ProductPlanProductsFrontend extends Partial<ProductPlanProductsInterface> {
+    isNew?: boolean; // true pre nové položky
+    dirty?: boolean; // true ak bola položka upravená
+}
+

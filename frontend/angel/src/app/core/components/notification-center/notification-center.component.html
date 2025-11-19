@@ -1,9 +1,23 @@
 <!-- Toast notifikácie -->
-<div *ngIf="notification" 
-     [ngClass]="notification.type === 'warn' ? 'toast-warn' : 'toast-info'">
-  {{ notification.message }}
-  <button (click)="notification = null">✖</button>
-</div>
+<div *ngIf="notification"  
+
+     [ngClass]="{ 
+
+        'toast-success': notification.type === 'success', 
+
+        'toast-info': notification.type === 'info', 
+
+        'toast-warn': notification.type === 'warn', 
+
+        'toast-error': notification.type === 'error'  
+
+     }"> 
+
+     {{ notification.message }} 
+
+     <button (click)="notification = null">✖</button> 
+
+</div> 
 
 <!-- Confirm dialog -->
 <div *ngIf="confirmMessage" class="notification-confirm">

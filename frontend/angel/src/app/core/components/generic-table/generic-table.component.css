@@ -1,9 +1,40 @@
 /* --- Tabuľka --- */
 .app-table {
     width: 100%;
+    /* alebo max-width podľa potreby */
     border-collapse: collapse;
+    table-layout: auto;
+    /* dôležité: stĺpce sa prispôsobia obsahu */
     font-family: Arial, sans-serif;
     background-color: #fff;
+}
+
+.table-wrapper {
+    overflow-x: auto;
+    /* horizontálny scroll, ak je tabuľka širšia než container */
+}
+
+
+.app-table thead th button.mat-icon-button {
+    margin-left: 6px;
+    vertical-align: middle;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+}
+
+/* Ikonka */
+.app-table thead th button.mat-icon-button mat-icon {
+    font-size: 16px;
+    color: white;
+    /* aby bolo vidno na tmavomodrom pozadí */
+    vertical-align: middle;
+}
+
+/* Hover efekt pre tlačidlo */
+.app-table thead th button.mat-icon-button:hover mat-icon {
+    color: #ffeb3b;
+    /* žltá pri hover */
 }
 
 .app-table th,
@@ -51,6 +82,7 @@ tr.highlight-row {
 /* Zvýraznenie vybraného riadku */
 tr.selected {
     background-color: #cce5ff !important;
+    /* Toto prepisuje VŠETKO */
     font-weight: bold;
 }
 
@@ -116,7 +148,7 @@ tr.selected {
 .badge-pending {
     background-color: #fff3e0;
     /* svetlo-oranžová */
-    color: #f0ad4e;
+    color: #f0ad4e !important;
     /* tmavo-oranžový text */
     font-weight: bold;
     padding: 4px 8px;

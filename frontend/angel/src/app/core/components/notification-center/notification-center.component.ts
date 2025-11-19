@@ -21,7 +21,7 @@ export class NotificationCenterComponent implements OnInit {
     // Notifications (info / warn)
     this.notifyService.notifications$.subscribe(msg => {
       this.notification = msg;
-      setTimeout(() => this.notification = null, 3000); // automatické skrytie po 3s
+      setTimeout(() => this.notification = null, 8000); // automatické skrytie po 3s
     });
 
     // Confirms – manuálne zatváranie

@@ -2,20 +2,25 @@
 <app-navbar [selectedItem]="selectedItem"></app-navbar>
 
 <!-- Small navigation menu -->
-<app-small-navbar [menuItems]="productMenu"></app-small-navbar>
+<app-small-navbar ></app-small-navbar>
+
+<app-product-plan-product
+*ngIf="showModal"
+(closeDoor)="closeModal()"
+(productSelected)="onProductSelected($event)"
+></app-product-plan-product>
 
 <!-- 🔹 DETAIL TEMPLATE -->
 <ng-template #detailTpl>
-  <form [formGroup]="itemForm" *ngIf="itemForm" class="product-grid" (ngSubmit)="saveItem()">
+  <form [formGroup]="itemForm" *ngIf="itemForm" class="product-grid" 
+      >
 
     <!-- 🔸 Sekcia: základné info o pláne -->
     <div class="plan-header">
       <label>Číslo plánu:
-        <input formControlName="plan_number" readonly>
+        <input formControlName="plan_number">
       </label>
-      <label>Typ plánu:
-        <input formControlName="plan_type" readonly>
-      </label>
+      
       <label>Platný od:
         <input type="date" formControlName="start_date">
       </label>
@@ -28,10 +33,13 @@
   
 
     <!-- 🔹 Sekcia: produkty -->
-    <div formArrayName="items">
-      <div *ngFor="let itemGroup of itemsFormArray.controls; let i = index" [formGroupName]="i" class="product-item"
+    <div formArrayName="items"class="products-section">
+      <div *ngFor="let itemGroup of itemsFormArray.controls; let i = index" 
+      [formGroupName]="i" 
+      class="product-item"
       (click)="selectItemForDelete(i)" 
-        [class.is-selected]="selectedItemIndex === i">
+      [class.is-selected]="selectedItemIndex === i"
+      [ngClass]="getItemClass(itemGroup)">
 
         <!-- Produkt info -->
         <h3>
@@ -44,17 +52,29 @@
           <label>ID:
             <input formControlName="id" readonly>
           </label>
-          <label>Kód produktu:
-            <input formControlName="product" >
+        
+
+          
+          
+          <label class="product-input-group">
+            Kód produktu:
+            <div class="input-with-button">
+              <input 
+                formControlName="product_id" 
+                placeholder="Zadajte jedinečný kód produktu..."
+                type="text"
+                autocomplete="off"
+              >
+              <button 
+    type="button" 
+    class="lookup-button"
+    (click)="openModalForEdit(i)" title="Vyhľadať produkt..."
+>
+    &#8942;
+</button>
+            </div>
           </label>
-          <label>Kód produktu:
-            <input 
-            formControlName="product_id" 
-            placeholder="Zadajte jedinečný kód produktu..."
-            type="text"
-            autocomplete="off"
-        >
-          </label>
+                   
           <label>Plánované množstvo:
             <input type="number" formControlName="planned_quantity" min="1">
           </label>
@@ -113,8 +133,14 @@
     </div>
 
     <div class="form-actions">
-      <button type="submit" class="btn-save"
-      matTooltip="Zmaže aktuálne vybranú položku plánu">💾 Uložiť zmeny</button>
+      <button 
+      type="button" 
+      class="btn-save"
+      matTooltip="Uloží aktuálne zmeny plánu"
+      (click)="!suppressLiveSave && !isCreatingNewPlan && saveItem()"
+      >
+      💾 Uložiť zmeny
+    </button>
 
       <button type="button" class="btn-cancel" (click)="cancelEdit()"
       matTooltip="Zmaže aktuálne vybranú položku plánu">❌ Zrušiť</button>
@@ -137,10 +163,28 @@
       >
         🗑️ Vymazať položku
       </button>
+
+      <button (click)="createNewPlan()" class="btn btn-primary">
+        <i class="fas fa-plus"></i> 🧩Vytvoriť Nový Plán
+    </button>
     </div>
 
   </form>
 </ng-template>
+
+<!-- Spinner -->
+<div class="spinner-wrapper" *ngIf="isLoading">
+  <mat-progress-spinner
+    mode="indeterminate"
+    color="primary"
+    diameter="50">
+  </mat-progress-spinner>
+  <p>Načítavam dáta...</p>
+</div>
+
+<!-- Error message -->
+<div *ngIf="errorMessage" class="error">{{ errorMessage }}</div>
+
 
 <!-- 🔹 MASTER LAYOUT -->
 <app-master-layout
@@ -158,6 +202,8 @@
     [data]="objectItems"
     [selectedItem]="selectedItem"
     (rowClick)="selectItems($event)"
+    [rowClassMap]="getRowClass.bind(this)"
+    [defaultSortColumn]="'plan_number'"
    >
   </app-generic-table>
 </ng-template>

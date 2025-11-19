@@ -1,0 +1,110 @@
+<p>test works!</p>
+<label for="name">Name: </label>
+<input id="name" type="text" [formControl]="name">
+
+<p>Your name is: {{ name.value }}</p>
+
+<button type="button" (click)="updateName()">Update Name</button>
+<h3>profileForm.setValue</h3>
+
+<form [formGroup]="profileForm" (ngSubmit)="onSubmit()">
+    <label for="first-name">First Name: </label>
+    <input id="first-name" type="text" formControlName="firstName" />
+
+    <div class="error" *ngIf="profileForm.controls['firstName'].invalid && profileForm.controls['firstName'].touched">
+        First name is required.
+      </div>
+
+    <label for="last-name">Last Name: </label>
+    <input id="last-name" type="text" formControlName="lastName" />
+
+    <div class="error" *ngIf="profileForm.controls['lastName'].invalid && profileForm.controls['lastName'].touched">
+        Last name is required.
+      </div>
+      <button type="submit" [disabled]="!profileForm.valid">Submit</button>
+  </form>
+
+  <button type="button" (click)="fillform()">Update Name and Lastname</button>
+
+<h3>Address group </h3>
+  <form [formGroup]="profileForm1" (ngSubmit)="onSubmit()">
+
+    <!-- First Name a Last Name -->
+    <label for="firstName">First Name:</label>
+    <input id="firstName" type="text" formControlName="firstName" />
+  
+    <label for="lastName">Last Name:</label>
+    <input id="lastName" type="text" formControlName="lastName" />
+  
+    <!-- Address group -->
+    <div formGroupName="address">
+      <h2>Address</h2>
+      <label for="street">Street:</label>
+      <input id="street" type="text" formControlName="street" />
+  
+      <label for="city">City:</label>
+      <input id="city" type="text" formControlName="city" />
+  
+      <label for="state">State:</label>
+      <input id="state" type="text" formControlName="state" />
+  
+      <label for="zip">Zip Code:</label>
+      <input id="zip" type="text" formControlName="zip" />
+    </div>
+  
+    <button type="submit">Submit</button>
+    <button type="button" (click)="updateProfile()">Update Profile</button>
+  </form>
+
+
+<h3>formBuilder</h3>
+  <p>Form Status: {{ profileForm2.status }}</p>
+  <form [formGroup]="profileForm2" (ngSubmit)="onSubmit()">
+
+    <label>First Name:</label>
+    <input type="text" formControlName="firstName" />
+  
+    <label>Last Name:</label>
+    <input type="text" formControlName="lastName" />
+  
+    <div formGroupName="address">
+      <label>Street:</label>
+      <input type="text" formControlName="street" />
+  
+      <label>City:</label>
+      <input type="text" formControlName="city" />
+  
+      <label>State:</label>
+      <input type="text" formControlName="state" />
+  
+      <label>Zip:</label>
+      <input type="text" formControlName="zip" />
+    </div>
+  
+    <button type="submit" [disabled]="!profileForm2.valid">Submit</button>
+  </form>
+
+
+  <h3>FormArray</h3>
+  <form [formGroup]="profileForm3" (ngSubmit)="onSubmit1()">
+
+    <label>First Name:</label>
+    <input formControlName="firstName" />
+  
+    <label>Last Name:</label>
+    <input formControlName="lastName" />
+  
+    <div formArrayName="phones">
+      <div *ngFor="let phone of phones.controls; let i = index">
+        <input [formControlName]="i" placeholder="Phone number" />
+        <button type="button" (click)="removePhone(i)">Remove</button>
+      </div>
+    </div>
+  
+    <button type="button" (click)="addPhone()">Add Phone</button>
+    <button type="submit">Submit</button>
+  </form>
+  
+  
+  
+  

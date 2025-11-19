@@ -30,13 +30,19 @@ import { FormGroup } from '@angular/forms';
   templateUrl: './product-plan-products.html',
   styleUrls: ['./product-plan-products.css']
 })
-export class ProducrPlanProductComponent implements OnInit {
+export class ProductPlanProductComponent implements OnInit {
+
+  @Output() closeDoor = new EventEmitter<void>();
+  @Output() productSelected = new EventEmitter<ProductPlanItemsInterface>();
+  onClose() { this.closeDoor.emit(); }
+
 
 
   isLoading = true;
   errorMessage = '';
   product: ProductPlanItemsInterface[] = [];
   ProductForm: FormGroup | null = null;
+  selectedProduct!: ProductPlanItemsInterface;
 
   columns: TableColumn[] = [
     { key: 'id', label: 'Kód', type: 'number' },
@@ -86,4 +92,20 @@ export class ProducrPlanProductComponent implements OnInit {
       }
     });
   }
+
+  selectProduct(product: ProductPlanItemsInterface) {
+    console.log('Klikol si na Produkt:', product);
+    this.selectedProduct = product;  // zatiaľ si ho len uložíme lokálne
+    this.cdr.detectChanges();// <--- PRIDAŤ ChangeDetectorRef
+
+  }
+
+  confirmSelection() {
+    if (this.selectedProduct) {
+      this.productSelected.emit(this.selectedProduct);  // 
+    }
+    this.closeDoor.emit()
+  }
+
+
 }

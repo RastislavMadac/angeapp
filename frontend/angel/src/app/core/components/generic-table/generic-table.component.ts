@@ -4,11 +4,13 @@ import { TableColumn } from '../../interface/tablecolumnn.interface';
 import { Subscription } from 'rxjs';
 import { FormsModule } from '@angular/forms';
 import { FilterService } from '../../servicies/filter.service';
+import { MatIconModule } from '@angular/material/icon';
+import { MatButtonModule } from '@angular/material/button';
 
 @Component({
   selector: 'app-generic-table',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, MatIconModule, MatButtonModule],
   templateUrl: './generic-table.component.html',
   styleUrls: ['./generic-table.component.css']
 })
@@ -27,6 +29,30 @@ export class GenericTableComponent<T extends object> implements OnInit, OnChange
 
   @Input() rowClassMap: (row: any) => string = () => ''; // Ponechajte default hodnotu
 
+  @Input() defaultSortColumn: string | null = null; // nový input
+
+
+  sortColumn: string | null = null;
+  sortAsc: boolean = true;
+
+
+
+  sortData(columnKey: string) {
+    if (this.sortColumn === columnKey) {
+      // prepni smer
+      this.sortAsc = !this.sortAsc;
+    } else {
+      this.sortColumn = columnKey;
+      this.sortAsc = true;
+    }
+
+    // zoradenie kópiou dát
+    this.filteredData = [...this.filteredData].sort((a, b) => {
+      const valA = this.getValue(a, columnKey)?.toString().toLowerCase() ?? '';
+      const valB = this.getValue(b, columnKey)?.toString().toLowerCase() ?? '';
+      return this.sortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+    });
+  }
 
 
   // ---------- Vyhľadávanie/filtrovanie ----------
@@ -44,7 +70,19 @@ export class GenericTableComponent<T extends object> implements OnInit, OnChange
     this.filterSub = this.filterService.filters$.subscribe(filters => {
       this.applyFilters(filters);
     });
+
+
+    this.filteredData = [...this.data];
+
+    // ak je zadaný default stĺpec na zoradenie
+    if (this.defaultSortColumn) {
+      this.sortColumn = this.defaultSortColumn;
+      this.sortAsc = true; // A-Z
+      this.sortData(this.sortColumn); // zavoláme sort
+    }
   }
+
+
 
   ngOnChanges(changes: SimpleChanges) {
     if (changes['data']) {
@@ -109,5 +147,7 @@ export class GenericTableComponent<T extends object> implements OnInit, OnChange
           .includes(filter)
       )
     );
+
   }
+
 }

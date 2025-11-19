@@ -20,14 +20,60 @@
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
 }
 
+.toast-success {
+    background: #0ae05c;
+    color: black;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    position: fixed;
+    top: 1.2rem;
+    right: 24rem;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
 .notification-confirm {
     position: fixed;
     top: 30%;
     left: 50%;
     transform: translateX(-50%);
-    background: white;
-    border: 1px solid #ccc;
-    padding: 1rem;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    background: #fff;
+    border: 2px solid #0a9cd6;
+    padding: 1.5rem 2rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    border-radius: 8px;
+    font-family: Arial, sans-serif;
+    font-size: 1rem;
+    color: #333;
+    z-index: 1000;
+    opacity: 0;
+    animation: fadeIn 0.3s forwards;
+    text-align: center;
+    /* centrovanie textu */
+    line-height: 1.5;
+    /* pohodlnejšie čítanie textu */
+}
+
+/* Animácia pre jemný fade-in */
+@keyframes fadeIn {
+    to {
+        opacity: 1;
+    }
+}
+
+/* Tlačidlá */
+.notification-confirm button {
+    margin: 0.5rem 0.25rem 0 0.25rem;
+    /* horný margin 0.5rem, medzi tlačidlami 0.5rem celkovo */
+    padding: 0.5rem 1rem;
+    border: none;
+    background-color: #007bff;
+    color: white;
+
     border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.notification-confirm button:hover {
+    background-color: #0056b3;
 }

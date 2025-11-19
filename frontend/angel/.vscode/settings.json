@@ -1,0 +1,96 @@
+{
+    // ======================================================
+    // 🎨 COMMENT ANCHORS — emoji & farby pre sekcie
+    // ======================================================
+    "commentAnchors.tags": [
+        {
+            "tag": "🔧 SECTION",
+            "icon": "gear",
+            "iconColor": "#42A5F5",
+            "highlightColor": "#E3F2FD",
+            "scope": "file"
+        },
+        {
+            "tag": "🌐 API",
+            "icon": "cloud",
+            "iconColor": "#81C784",
+            "highlightColor": "#E8F5E9",
+            "scope": "file"
+        },
+        {
+            "tag": "🎨 UI",
+            "icon": "layout",
+            "iconColor": "#F48FB1",
+            "highlightColor": "#FCE4EC",
+            "scope": "file"
+        },
+        {
+            "tag": "🧠 LOGIC",
+            "icon": "circuit-board",
+            "iconColor": "#BA68C8",
+            "highlightColor": "#F3E5F5",
+            "scope": "file"
+        },
+        {
+            "tag": "⚙️ CONFIG",
+            "icon": "settings",
+            "iconColor": "#FFB74D",
+            "highlightColor": "#FFF3E0",
+            "scope": "file"
+        },
+        {
+            "tag": "✅ TODO",
+            "icon": "check",
+            "iconColor": "#FFD54F",
+            "highlightColor": "#FFF8E1",
+            "scope": "file"
+        },
+        {
+            "tag": "🚨 FIXME",
+            "icon": "alert",
+            "iconColor": "#E57373",
+            "highlightColor": "#FFEBEE",
+            "scope": "workspace"
+        },
+        {
+            "tag": "📦 MODEL",
+            "icon": "package",
+            "iconColor": "#64B5F6",
+            "highlightColor": "#E3F2FD",
+            "scope": "file"
+        },
+        {
+            "tag": "🧩 SERVICE",
+            "icon": "server",
+            "iconColor": "#81C784",
+            "highlightColor": "#E8F5E9",
+            "scope": "file"
+        },
+        {
+            "tag": "🪄 HELPER",
+            "icon": "wand",
+            "iconColor": "#BA68C8",
+            "highlightColor": "#F3E5F5",
+            "scope": "file"
+        }
+    ],
+    // ======================================================
+    // 🧠 EDITOR & FORMATTING
+    // ======================================================
+    "editor.formatOnSave": true,
+    "editor.tabSize": 2,
+    "editor.insertSpaces": true,
+    // ======================================================
+    // ⚙️ LANGUAGE SUPPORT
+    // ======================================================
+    "typescript.tsdk": "node_modules/typescript/lib",
+    "python.analysis.autoImportCompletions": true,
+    // ======================================================
+    // 🧹 FILES TO IGNORE
+    // ======================================================
+    "files.exclude": {
+        "**/.DS_Store": true,
+        "**/__pycache__": true,
+        "**/node_modules": true
+    }
+}

@@ -2,23 +2,35 @@ import { Component } from '@angular/core';
 
 import { Router } from '@angular/router';
 import { UserService } from '../../core/servicies/user.service';
+import { NotificationService } from '../../core/servicies/notification.service';
 
+import { NotificationCenterComponent } from '../../core/components/notification-center/notification-center.component';
 import { NgIf } from '@angular/common';
-import { FormsModule } from '@angular/forms';
+import { FormControl, FormGroup, FormsModule } from '@angular/forms';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [FormsModule, NgIf], // FormsModule namiesto ReactiveFormsModule
+  imports: [FormsModule], // FormsModule namiesto ReactiveFormsModule
   templateUrl: './login.component.html',
   styleUrls: ['./login.component.css']
 })
 export class LoginComponent {
   username = '';
   password = '';
-  errorMessage = '';
 
-  constructor(private userService: UserService, private router: Router) { }
+
+  constructor(
+    private userService: UserService,
+    private router: Router,
+    private notify: NotificationService) { }
+
+  updateuUser() {
+    this.username = 'rasto';
+    this.password = 'Rastislav1982@';
+  }
+
+
 
   // onSubmit() {
   //   if (!this.username || !this.password) {
@@ -42,7 +54,7 @@ export class LoginComponent {
   // }
   onSubmit() {
     if (!this.username || !this.password) {
-      this.errorMessage = 'Zadajte používateľské meno a heslo.';
+      this.notify.notify('Zadajte používateľské meno a heslo.');
       return;
     }
 
@@ -53,9 +65,12 @@ export class LoginComponent {
       },
       error: (err: any) => {
         console.error('Login error:', err);
-        this.errorMessage = 'Nesprávne meno alebo heslo';
+        this.notify.notify('Nesprávne meno alebo heslo');
       }
     });
   }
+
+
+
 }
 
