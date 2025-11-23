@@ -467,7 +467,7 @@ class ProductionCard(models.Model):
 
 class StockReceipt(models.Model):
    
-    receipt_number = models.CharField(max_length=50, unique=True)
+    receipt_number = models.CharField(max_length=100, db_index=True)
    
 
     # Prepojenie na výrobnú kartu a plán – iba pre automatické príjemky

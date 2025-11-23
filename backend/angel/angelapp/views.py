@@ -19,7 +19,11 @@ from rest_framework.response import Response
 from decimal import Decimal
 from rest_framework.exceptions import ValidationError
 from rest_framework.decorators import action
-
+from rest_framework.viewsets import ModelViewSet
+from django.db.models import Sum, Q
+from angelapp.services.production_card_service import ProductionCardService
+from rest_framework.exceptions import ValidationError as DRFValidationError # Import DRF chyby
+from django.core.exceptions import ValidationError as DjangoValidationError #
 
 
 
@@ -343,225 +347,171 @@ class ProductionPlanViewSet(viewsets.ModelViewSet):
 # -----------------------
 # ProductionCardViewSet
 # -----------------------
-class ProductionCardViewSet(viewsets.ModelViewSet):
-    queryset = ProductionCard.objects.all().order_by("-created_at")
+
+
+
+
+class ProductionCardViewSet(ModelViewSet):
+    queryset = ProductionCard.objects.all()
     serializer_class = ProductionCardSerializer
-    permission_classes = [IsAuthenticated]
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ["card_number", "plan_item__product__product_name"]
-    ordering_fields = ["planned_quantity", "produced_quantity", "status", "start_time", "end_time"]
+
+    # -------------------------------
+    # Endpoint pre všetky karty
+    # -------------------------------
+    @action(detail=False, methods=["get"], url_path="check-orders")
+    def check_orders_all(self, request):
+        """
+        Porovná všetky objednávky (neukončené) s výrobnými kartami (neukončenými).
+        Vráti info o produktoch, ktoré nemajú dostatočne naplánovanú výrobu.
+        """
+        return Response(self._get_warnings())
+
+    # -------------------------------
+    # Endpoint pre konkrétnu kartu
+    # -------------------------------
+    @action(detail=True, methods=["get"], url_path="check-orders")
+    def check_orders(self, request, pk=None):
+        """
+        Porovná objednávky s konkrétnou výrobou (podľa PK ProductionCard).
+        """
+        card = self.get_object()
+        return Response(self._get_warnings(card))
     
-
     def perform_create(self, serializer):
-        plan_item = serializer.validated_data["plan_item"]
-        product = plan_item.product
-        requested_qty = serializer.validated_data.get("planned_quantity")
+        # 1. Získanie validovaných dát
+        validated_data = serializer.validated_data
+        
+        plan_item = validated_data.get('plan_item')
+        
+        # Ak 'planned_quantity' nie je súčasťou modelu/serializer fieldov,
+        # musíme ho vytiahnuť z 'initial_data' (raw input), nie validated_data
+        requested_qty = validated_data.get('planned_quantity')
+        if requested_qty is None:
+             requested_qty = self.request.data.get('planned_quantity')
 
-        # -------------------------------
-        # 1️⃣ Kontrola objednávok
-        # -------------------------------
-        missing_orders = self.check_orders_against_production_card(plan_item)
+        # Konverzia na int, ak prišlo ako string (z request.data)
+        if requested_qty is not None:
+            try:
+                requested_qty = int(requested_qty)
+            except (ValueError, TypeError):
+                raise DRFValidationError({"planned_quantity": "Musí byť číslo."})
 
-        # -------------------------------
-        # 2️⃣ Zisti dostupné množstvo (nezáporné)
-        # -------------------------------
-        available_qty = max(plan_item.planned_quantity - plan_item.transfered_pcs, 0)
-        requested_qty = serializer.validated_data.get("planned_quantity", available_qty)
+        user = self.request.user
 
-        if requested_qty > available_qty:
-            raise ValidationError(
-                f"Nemožno preniesť {requested_qty} ks – dostupných je len {available_qty} ks."
+        try:
+            # 3. Vytvorenie karty pomocou Service Layer
+            new_card = ProductionCardService.create_production_card(
+                plan_item=plan_item,
+                requested_qty=requested_qty,
+                user=user
             )
+            # Nastavíme inštanciu, aby ModelViewSet vedel vrátiť správnu Response
+            serializer.instance = new_card
+            
+        except DjangoValidationError as e:
+            # KONVERZIA CHYBY: Django Error -> DRF Error (aby frontend dostal JSON 400)
+            raise DRFValidationError(e.message_dict if hasattr(e, 'message_dict') else str(e))
 
-        serializer.validated_data["planned_quantity"] = requested_qty
-
-        # -------------------------------
-        # 🧾 2.5️⃣ Overenie zásob surovín
-        # -------------------------------
-        from decimal import Decimal
-        from angelapp.models import ProductIngredient  # prispôsob podľa tvojej cesty
-
-        # Ak produkt nie je surovina (tzn. je to výrobok)
-        if product.product_type.name.lower() != "surovina":
-            recipe_items = ProductIngredient.objects.filter(product=product)
-            if not recipe_items.exists():
-                raise ValidationError(f"Produkt '{product.product_name}' nemá definovanú receptúru (žiadne suroviny).")
-
-            missing_materials = []
-            for item in recipe_items:
-                ingredient = item.ingredient
-                required_qty = Decimal(item.quantity) * Decimal(requested_qty)
-                available_qty = Decimal(ingredient.available_quantity())
-
-                if available_qty < required_qty:
-                    missing_materials.append({
-                        "ingredient": ingredient.product_name,
-                        "required": float(required_qty),
-                        "available": float(available_qty)
-                    })
-
-            if missing_materials:
-                raise ValidationError({
-                    "detail": "Nie je dostatok surovín na sklade pre túto výrobu.",
-                    "missing_materials": missing_materials
-                })
-
-        # -------------------------------
-        # 3️⃣ Generovanie card_number
-        # -------------------------------
-        current_year = timezone.now().year
-        prefix = f"{current_year}VK"
-        last_card = ProductionCard.objects.filter(card_number__startswith=prefix).order_by("card_number").last()
-        last_number = int(last_card.card_number[-4:]) if last_card else 0
-        serializer.validated_data["card_number"] = f"{prefix}{str(last_number + 1).zfill(4)}"
-
-        # -------------------------------
-        # 4️⃣ Aktualizácia prenesených kusov položky plánu
-        # -------------------------------
-        plan_item.transfered_pcs += requested_qty
-        if plan_item.transfered_pcs >= plan_item.planned_quantity:
-            plan_item.status = "completed"
-        elif plan_item.transfered_pcs > 0:
-            plan_item.status = "partially completed"
-        else:
-            plan_item.status = "pending"
-        plan_item.save()
-
-        # -------------------------------
-        # 5️⃣ Uloženie karty
-        # -------------------------------
-        instance = serializer.save(
-            created_by=self.request.user,
-            updated_by=self.request.user,
-            status="in_production"
-        )
-
-        # -------------------------------
-        # 6️⃣ Ak existujú nevybavené objednávky – pridať varovanie
-        # -------------------------------
-        response_data = serializer.data
-        if missing_orders:
-            response_data["warning"] = {
-                "detail": "Existujú objednávky so statusom 'pending', ktoré nie sú pokryté výrobou.",
-                "missing_orders": missing_orders
-            }
-
-        return Response(response_data, status=status.HTTP_201_CREATED)
-
-    # -------------------------------
-    # Pomocná metóda: kontrola objednávok
-    # -------------------------------
-    def check_orders_against_production_card(self, plan_item):
-         # zoznam ID produktov, ktoré sú v tejto výrobnej karte
-        products_in_card_ids = [plan_item.product.id]
-
-
-        open_orders = OrderItem.objects.filter(status='pending')
-
-        missing_in_card = []
-        for order_item in open_orders:
-             if order_item.product_id not in products_in_card_ids:
-                missing_in_card.append({
-                    "order_id": order_item.order.id,
-                    "product": order_item.product.product_name,
-                    "quantity": order_item.quantity
-                })
-
-        return missing_in_card
-
-
- # ---------------------------------------------------------------------
-    # PATCH — umožní meniť vyrobené množstvo a vytvára automatické príjemky
-    # ---------------------------------------------------------------------
     def partial_update(self, request, *args, **kwargs):
-        instance = self.get_object()
-        old_produced = instance.produced_quantity
-        new_produced = int(request.data.get("produced_quantity", old_produced))
+        card_instance = self.get_object()
+        new_produced = request.data.get('produced_quantity')
+        user = request.user
 
-        # Žiadna zmena
-        if new_produced == old_produced:
-            return Response(
-                {"detail": "Žiadna zmena vo vyrobenom množstve."},
-                status=status.HTTP_200_OK
-            )
-
-        # Zakáž zníženie vyrobeného množstva
-        if new_produced < old_produced:
-            raise ValidationError("Nie je povolené znižovať vyrobené množstvo.")
-
-        # Rozdiel vyrobeného množstva
-        diff = new_produced - old_produced
-
-        # 1️⃣ Uloženie nového vyrobeného množstva cez serializer.update
-        serializer = self.get_serializer(instance, data={"produced_quantity": new_produced}, partial=True)
-        serializer.is_valid(raise_exception=True)
-        updated_instance = serializer.save(updated_by=request.user)
-
-        # 2️⃣ Aktualizácia statusu podľa pôvodnej logiky
-        if updated_instance.produced_quantity >= updated_instance.planned_quantity:
-            updated_instance.status = "completed"
-        elif updated_instance.produced_quantity > 0:
-            updated_instance.status = "partially completed"
-        else:
-            updated_instance.status = "in_production"
-        updated_instance.save()
-
-        # 3️⃣ Aktualizácia výrobku a ingrediencií (iba ak je diff > 0)
-        if diff > 0:
-            product = updated_instance.plan_item.product
-            produced_qty = Decimal(diff)
-
-            # Pridanie vyrobeného množstva do výrobku
-            product.total_quantity += produced_qty
-
-            # Rezervovanie ingrediencií podľa receptúry
-            recipe_items = ProductIngredient.objects.filter(product=product)
-            for item in recipe_items:
-                ingredient = item.ingredient
-                required_qty = Decimal(item.quantity) * produced_qty
-                ingredient.reserve(required_qty)
-
-            # Prepočet free_quantity výrobku
-            product.update_available()
-
-        # 4️⃣ Automatická príjemka – iba ak diff > 0 alebo ešte neexistuje
-        # Automatická príjemka výrobku
-        if diff > 0 or not updated_instance.stock_receipt_created:
-            receipt_number = StockReceiptViewSet().generate_receipt_number()
-
-            # Vytvor príjemku pre výrobok
-            stock_receipt = StockReceipt.objects.create(
-                receipt_number=receipt_number,
-                production_card=updated_instance,
-                production_plan=updated_instance.plan_item.production_plan,
-                product=updated_instance.plan_item.product,
-                quantity=Decimal(diff if diff > 0 else updated_instance.produced_quantity),
-                created_by=request.user,
-                notes=f"Automatická príjemka z výrobnej karty {updated_instance.card_number}"
-            )
-
-            # Pridanie surovín s minusovou hodnotou
-            recipe_items = ProductIngredient.objects.filter(product=updated_instance.plan_item.product)
-            for item in recipe_items:
-                ingredient = item.ingredient
-                used_qty = Decimal(item.quantity) * Decimal(diff if diff > 0 else updated_instance.produced_quantity)
-                StockReceipt.objects.create(
-                    receipt_number=receipt_number,
-                    production_card=updated_instance,
-                    production_plan=updated_instance.plan_item.production_plan,
-                    product=ingredient,
-                    quantity=-used_qty,  # minusová hodnota pre spotrebovanú surovinu
-                    created_by=request.user,
-                    notes=f"Surovina spotrebovaná pri výrobe {updated_instance.plan_item.product.product_name}"
+        # Ak sa pokúšame aktualizovať vyrobené množstvo
+        if new_produced is not None:
+            try:
+                # Bezpečná konverzia na int
+                val = int(new_produced)
+            except (ValueError, TypeError):
+                return Response(
+                    {"produced_quantity": "Musí byť platné celé číslo."},
+                    status=status.HTTP_400_BAD_REQUEST
                 )
 
-            updated_instance.stock_receipt_created = True
-            updated_instance.save()
+            try:
+                # Volanie servisu
+                updated_card = ProductionCardService.update_produced_quantity(
+                    card=card_instance,
+                    new_produced=val,
+                    user=user
+                )
+                
+                # Vrátime serializované dáta
+                # context={'request': request} je dôležitý pre HyperlinkedIdentityField a iné DRF veci
+                serializer = self.get_serializer(updated_card, context={'request': request})
+                return Response(serializer.data)
 
+            except DjangoValidationError as e:
+                # Opäť konverzia chyby
+                error_msg = e.message_dict if hasattr(e, 'message_dict') else str(e)
+                return Response({"error": error_msg}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Štandardný update pre iné polia
+        return super().partial_update(request, *args, **kwargs)
 
-        # 5️⃣ Vrátime serializer s aktuálnymi dátami
-        serializer = self.get_serializer(updated_instance)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+            
+    # -------------------------------
+    # Interná metóda na porovnanie objednávok a production cards
+    # -------------------------------
+    def _get_warnings(self, card=None):
+        """
+        card: ak je None → kontroluje všetky karty, inak len konkrétnu.
+        """
+        # 1️⃣ Aktívne objednávky (neukončené)
+        order_items = OrderItem.objects.filter(
+            product__product_type__name="Výrobok",
+            order__status__in=["new", "processing"]  # uprav podľa svojich statusov
+        ).values(
+            "product_id",
+            "product__product_name",
+            "order__id",
+            "order__order_number",
+            "order__customer__name"
+        ).annotate(
+            ordered_qty=Sum("quantity")
+        )
+
+        # 2️⃣ Aktívne production cards
+        planned_cards_qs = ProductionCard.objects.filter(
+            status__in=["pending", "in_production"]
+        )
+        if card:
+            planned_cards_qs = planned_cards_qs.filter(pk=card.pk)
+
+        planned_cards = planned_cards_qs.values(
+            "plan_item__product_id"
+        ).annotate(
+            planned_qty=Sum("planned_quantity")
+        )
+
+        # prevod na dict {product_id: planned_qty}
+        planned_map = {
+            row["plan_item__product_id"]: row["planned_qty"] for row in planned_cards
+        }
+
+        warnings = []
+
+        for item in order_items:
+            pid = item["product_id"]
+            ordered = item["ordered_qty"]
+            planned = planned_map.get(pid, 0)
+
+            if ordered > planned:
+                warnings.append({
+                    "product_id": pid,
+                    "product_name": item["product__product_name"],
+                    "ordered": ordered,
+                    "planned": planned,
+                    "missing": ordered - planned,
+                    "order_id": item["order__id"],
+                    "order_number": item["order__order_number"],
+                    "customer_name": item["order__customer__name"]
+                })
+
+        return {
+            "total_warnings": len(warnings),
+            "warnings": warnings
+        }
 
 # -----------------------
 # StockReceiptViewSet
@@ -740,7 +690,9 @@ class ProductionPlanItemViewSet(viewsets.ModelViewSet):
     search_fields = ["product__product_name"]
     ordering_fields = ["planned_date", "planned_quantity", "status"]
 
-    # Štandardný CRUD
+
+
+  
     def perform_create(self, serializer):
         serializer.save()
 

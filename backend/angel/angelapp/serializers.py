@@ -5,6 +5,8 @@ from rest_framework.authtoken.models import Token
 import re
 from django.core.exceptions import ObjectDoesNotExist
 from django.utils import timezone
+from rest_framework.exceptions import APIException
+
 
 # USERS
 class UserSerializer(serializers.ModelSerializer):
@@ -351,13 +353,13 @@ class OrderSerializer(serializers.ModelSerializer):
 class ProductionCardSerializer(serializers.ModelSerializer):
     operator_name = serializers.StringRelatedField(source="operator", read_only=True)
     plan_item_id = serializers.PrimaryKeyRelatedField(
-        queryset=ProductionPlanItem.objects.all(),
-        source="plan_item",
-        write_only=True
+        queryset=ProductionPlanItem.objects.all(), source="plan_item", write_only=True
     )
     card_number = serializers.CharField(read_only=True)
     status = serializers.CharField(read_only=True)
     product_name = serializers.CharField(source="plan_item.product.product_name", read_only=True)
+    plan_item_name = serializers.CharField(source="plan_item.__str__", read_only=True)
+    production_plan_number = serializers.CharField(source="plan_item.production_plan.plan_number", read_only=True)
 
     class Meta:
         model = ProductionCard
@@ -366,66 +368,57 @@ class ProductionCardSerializer(serializers.ModelSerializer):
             "card_number",
             "product_name",
             "plan_item_id",
+            "plan_item_name",
+            "production_plan_number",
             "planned_quantity",
             "produced_quantity",
             "defective_quantity",
             "remaining_quantity",
             "status",
-            "operator", "operator_name",
-            "start_time", "end_time",
+            "operator",
+            "operator_name",
+            "start_time",
+            "end_time",
             "notes",
             "stock_receipt_created",
-            "created_at", "created_by",
-            "updated_at", "updated_by",
+            "created_at",
+            "created_by",
+            "updated_at",
+            "updated_by",
         ]
-        read_only_fields = ["remaining_quantity", "created_at", "updated_at"]
+        read_only_fields = ["remaining_quantity", "created_at", "updated_at", "card_number", "status", "plan_item_name", "production_plan_number"]
 
-    def validate_plan_item(self, value):
-        if value.product.product_type.name != "Výrobok":
-            raise serializers.ValidationError(
-                "Výrobnú kartu je možné vytvoriť iba pre produkt typu 'Výrobok'."
-            )
+    def validate_plan_item(self, value: ProductionPlanItem):
+        """Validate that plan_item refers to a producible product and there is remaining quantity."""
+        # product type must be 'Výrobok' (product)
+        if value.product.product_type.name.lower() != "výrobok" and value.product.product_type.name.lower() != "vyrobok":
+            raise serializers.ValidationError("Výrobnú kartu je možné vytvoriť iba pre produkt typu 'Výrobok'.")
 
-        # Zakáž prenos, ak už je položka completed
-        if value.transfered_pcs >= value.planned_quantity:
-            raise serializers.ValidationError(
-                f"Pre túto plánovú položku ({value.product.product_name}) je už výroba dokončená."
-            )
+        # check transferred pcs vs planned
+        available = value.planned_quantity - value.transfered_pcs
+        if available <= 0:
+            raise serializers.ValidationError(f"Pre túto plánovú položku ({value.product.product_name}) je už výroba dokončená.")
 
-        requested_qty = self.initial_data.get("planned_quantity")
-        if requested_qty is not None:
-            requested_qty = int(requested_qty)
-            available = value.planned_quantity - value.transfered_pcs
-            if requested_qty > available:
+        # requested qty (if supplied) must not exceed available
+        requested = self.initial_data.get("planned_quantity")
+        if requested is not None:
+            try:
+                requested = int(requested)
+            except (ValueError, TypeError):
+                raise serializers.ValidationError("planned_quantity musí byť celé číslo.")
+
+            if requested > available:
                 raise serializers.ValidationError(
-                    f"Nemožno preniesť {requested_qty} ks – dostupných je len {available} ks."
-                )
-
-        return value
-
-        if value.product.product_type.name != "Výrobok":
-            raise serializers.ValidationError(
-                "Výrobnú kartu je možné vytvoriť iba pre produkt typu 'Výrobok'."
-            )
-
-        requested_qty = self.initial_data.get("planned_quantity")
-        if requested_qty is not None:
-            requested_qty = int(requested_qty)
-            if requested_qty > value.planned_quantity - value.transfered_pcs:
-                raise serializers.ValidationError(
-                    f"Nemožno preniesť {requested_qty} ks – dostupných je len {value.planned_quantity - value.transfered_pcs} ks."
+                    f"Nemožno preniesť {requested} ks – dostupných je len {available} ks."
                 )
 
         return value
 
     def create(self, validated_data):
-        plan_item = validated_data["plan_item"]
-        planned_quantity = validated_data.get("planned_quantity", plan_item.planned_quantity)
-        validated_data["planned_quantity"] = planned_quantity
-
-       
-
+        # keep serializer create minimal — service layer will handle business rules
         return super().create(validated_data)
+
+
 
 # -----------------------
 # ProductionPlanItemSerializer
@@ -474,32 +467,59 @@ class ProductionPlanItemSerializer(serializers.ModelSerializer):
     
   
 
+
     def validate(self, data):
-        if self.instance is not None:
-          current_status = self.instance.status
-        
-        
-        FINAL_STATUSES = ["completed", "canceled","in_production","partially completed"] 
-        
-        if current_status in FINAL_STATUSES:
-            updatable_fields = [
-                "planned_quantity", 
-                "planned_date", 
-                "transfered_pcs", 
-                "product",
-                "status"
-            ]
-            is_attempting_important_change = any(
-                field in data for field in updatable_fields
-            )
-            if is_attempting_important_change:
-                # Môžeme vrátiť chybu na úrovni celého objektu (detail)
-                raise serializers.ValidationError(
-                    {"detail": f"Nie je možné meniť položku so statusom '{current_status}'. Položka je uzamknutá."}
+            
+            
+            # 1. Zistíme aktuálny status
+            # Ak ide o POST (vytvorenie), status je 'pending' (alebo iná hodnota z data)
+            current_status = data.get('status', 'pending') 
+
+            # Ak ide o PATCH/PUT (aktualizáciu), vezmeme status z existujúcej inštancie (self.instance)
+            if self.instance is not None:
+                # Ak sa v payloade posiela status, použijeme ten nový, inak použijeme starý status
+                current_status = data.get('status', self.instance.status)
+            
+            # 2. Definovanie finálnych/uzamknutých statusov
+            FINAL_STATUSES = ["completed", "canceled", "in_production", "partially completed"] 
+            if current_status not in FINAL_STATUSES:
+                return data
+
+                    # AKTUÁLNA HODNOTA, KTORÁ VSTUPUJE DO KONTROLY
+            print(f"DEBUG: Status pre validáciu je: {current_status}")
+            print(f"DEBUG: FINÁLNE STATUSY sú: {FINAL_STATUSES}")
+
+            # 3. Ak je aktuálny status uzamknutý, skontrolujeme zmeny
+            if current_status in FINAL_STATUSES:
+                
+                # Polia, ktorých zmena je zakázaná po uzamknutí
+                updatable_fields = [
+                    "planned_quantity", 
+                    "planned_date", 
+                    # Transfered_pcs by mohlo byť povolené, ale pre istotu ho necháme v zozname
+                    "transfered_pcs", 
+                    "product",
+                    # Status by mohol byť povolený, ak ho chceme meniť v uzamknutom stave, inak tu zostane
+                    "status" 
+                ]
+                
+                # Zistíme, či sa snažíme zmeniť niektoré z týchto polí
+                is_attempting_important_change = any(
+                    field in data for field in updatable_fields
                 )
-
-
-        return data
+                
+                if is_attempting_important_change:
+                    raise serializers.ValidationError(
+                        {
+                            # ✅ KONEČNÁ OPRAVA: Použite textový reťazec 'non_field_errors'
+                            # DRF to preloží správne.
+                            'non_field_errors': 
+                                [f"Nie je možné meniť položku so statusom '{current_status}'. Položka je uzamknutá."]
+                        }
+                                    )
+                            
+            return data
+    
     
     def validate_planned_date(self, value):
         """
