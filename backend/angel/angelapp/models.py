@@ -426,6 +426,7 @@ class ProductionCard(models.Model):
     STATUS_CHOICES = [
         ("pending", "Čaká sa"),
         ("in_production", "Vo výrobe"),
+        ("partially_completed", "Čiastočne dokončené"),
         ("completed", "Dokončené"),
         ("canceled", "Zrušené"),
     ]
@@ -494,46 +495,37 @@ class StockReceipt(models.Model):
         """
         Aktualizuje zásoby:
         - pridá množstvo k hotovému produktu
-        - aktualizuje rezervácie ingrediencií
+        - rezervuje ingrediencie podľa receptúry
         """
         product = self.product
+        qty = Decimal(self.quantity)
 
-        # -------------------------------
-        # 1️⃣ Pridanie hotového výrobku
-        # -------------------------------
-        product.total_quantity = (product.total_quantity or 0) + self.quantity
+        # 1️⃣ Pridanie hotového produktu
+        product.total_quantity = (product.total_quantity or 0) + qty
         product.free_quantity = (product.total_quantity or 0) - (product.reserved_quantity or 0)
         product.save(update_fields=["total_quantity", "free_quantity"])
 
-        # -------------------------------
-        # 2️⃣ Aktualizácia ingrediencií
-        # -------------------------------
+        # 2️⃣ Rezervácia ingrediencií podľa receptúry
         if self.production_card:
             card = self.production_card
-            ingredients = card.ingredients.all()  # predpokladáme cez M2M napr. ProductionCardIngredient
+            plan_item = card.plan_item
+            product_to_make = plan_item.product
 
-            for ing in ingredients:
-                material = ing.material  # referencia na model Product pre surovinu
-                used_qty = ing.quantity_used * float(self.quantity)  # kolko sa minulo z tejto suroviny
+            # Všetky ingrediencie potrebné na daný produkt
+            recipe_links = ProductIngredient.objects.filter(product=product_to_make)
 
-                # zvýšime rezervované množstvo
-                material.reserved_quantity = (material.reserved_quantity or 0) + used_qty
+            for link in recipe_links:
+                ingredient = link.ingredient
+                required_qty = Decimal(link.quantity) * qty
 
-                # prepočítame voľné množstvo
-                material.free_quantity = (material.total_quantity or 0) - (material.reserved_quantity or 0)
-                material.save(update_fields=["reserved_quantity", "free_quantity"])
+                # Zvýšenie rezervovaného množstva
+                ingredient.reserved_quantity = (ingredient.reserved_quantity or 0) + required_qty
+
+                # Prepočet voľného množstva
+                ingredient.free_quantity = (ingredient.total_quantity or 0) - ingredient.reserved_quantity
+                ingredient.save(update_fields=["reserved_quantity", "free_quantity"])
 
         return True
-    
-        """
-        Aktualizuje sklad hlavného produktu a rezervuje ingrediencie.
-        """
-        product = self.product
-        product.add_production(self.quantity)
 
-        # Získame ingrediencie a množstvo potrebné na výrobu 1 ks
-        ingredients = {pi.ingredients: pi.quantity for pi in product.productingredient_set.all()}
-        
-        # Rezervujeme ingrediencie podľa množstva vyrobených kusov
-        for ing, qty in ingredients.items():
-            ing.reserve(qty * self.quantity)
+    
+    

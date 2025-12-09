@@ -356,10 +356,11 @@ class ProductionCardSerializer(serializers.ModelSerializer):
         queryset=ProductionPlanItem.objects.all(), source="plan_item", write_only=True
     )
     card_number = serializers.CharField(read_only=True)
-    status = serializers.CharField(read_only=True)
+    # status = serializers.CharField(read_only=True)
     product_name = serializers.CharField(source="plan_item.product.product_name", read_only=True)
     plan_item_name = serializers.CharField(source="plan_item.__str__", read_only=True)
     production_plan_number = serializers.CharField(source="plan_item.production_plan.plan_number", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
 
     class Meta:
         model = ProductionCard
@@ -375,6 +376,7 @@ class ProductionCardSerializer(serializers.ModelSerializer):
             "defective_quantity",
             "remaining_quantity",
             "status",
+            "status_display",
             "operator",
             "operator_name",
             "start_time",
@@ -386,7 +388,7 @@ class ProductionCardSerializer(serializers.ModelSerializer):
             "updated_at",
             "updated_by",
         ]
-        read_only_fields = ["remaining_quantity", "created_at", "updated_at", "card_number", "status", "plan_item_name", "production_plan_number"]
+        read_only_fields = ["remaining_quantity", "created_at", "updated_at", "card_number",  "plan_item_name", "production_plan_number"]
 
     def validate_plan_item(self, value: ProductionPlanItem):
         """Validate that plan_item refers to a producible product and there is remaining quantity."""
@@ -414,6 +416,7 @@ class ProductionCardSerializer(serializers.ModelSerializer):
 
         return value
 
+    
     def create(self, validated_data):
         # keep serializer create minimal — service layer will handle business rules
         return super().create(validated_data)
@@ -465,176 +468,186 @@ class ProductionPlanItemSerializer(serializers.ModelSerializer):
     #             )
     #         return value
     
-  
-
-
-    def validate(self, data):
-            
-            
-            # 1. Zistíme aktuálny status
-            # Ak ide o POST (vytvorenie), status je 'pending' (alebo iná hodnota z data)
-            current_status = data.get('status', 'pending') 
-
-            # Ak ide o PATCH/PUT (aktualizáciu), vezmeme status z existujúcej inštancie (self.instance)
-            if self.instance is not None:
-                # Ak sa v payloade posiela status, použijeme ten nový, inak použijeme starý status
-                current_status = data.get('status', self.instance.status)
-            
-            # 2. Definovanie finálnych/uzamknutých statusov
-            FINAL_STATUSES = ["completed", "canceled", "in_production", "partially completed"] 
-            if current_status not in FINAL_STATUSES:
-                return data
-
-                    # AKTUÁLNA HODNOTA, KTORÁ VSTUPUJE DO KONTROLY
-            print(f"DEBUG: Status pre validáciu je: {current_status}")
-            print(f"DEBUG: FINÁLNE STATUSY sú: {FINAL_STATUSES}")
-
-            # 3. Ak je aktuálny status uzamknutý, skontrolujeme zmeny
-            if current_status in FINAL_STATUSES:
-                
-                # Polia, ktorých zmena je zakázaná po uzamknutí
-                updatable_fields = [
-                    "planned_quantity", 
-                    "planned_date", 
-                    # Transfered_pcs by mohlo byť povolené, ale pre istotu ho necháme v zozname
-                    "transfered_pcs", 
-                    "product",
-                    # Status by mohol byť povolený, ak ho chceme meniť v uzamknutom stave, inak tu zostane
-                    "status" 
-                ]
-                
-                # Zistíme, či sa snažíme zmeniť niektoré z týchto polí
-                is_attempting_important_change = any(
-                    field in data for field in updatable_fields
-                )
-                
-                if is_attempting_important_change:
-                    raise serializers.ValidationError(
-                        {
-                            # ✅ KONEČNÁ OPRAVA: Použite textový reťazec 'non_field_errors'
-                            # DRF to preloží správne.
-                            'non_field_errors': 
-                                [f"Nie je možné meniť položku so statusom '{current_status}'. Položka je uzamknutá."]
-                        }
-                                    )
-                            
-            return data
-    
-    
-    def validate_planned_date(self, value):
-        """
-        Skontroluje, či dátum položky je v rozsahu výrobného plánu.
-        Táto verzia pokrýva všetky scenáre (Create, Update, Nested Update)
-        a využíva ladiace výstupy na presné zistenie zdroja Plánu.
-        """
-        
-        plan = None
-        
-        # 1. Priorita: Kontext (Najspoľahlivejší pri NESTED operáciách z ProductionPlanSerializer)
-        plan = self.context.get("production_plan")
-        
-        # 2. Sekundárne: Existujúca inštancia (Pre update už existujúcich položiek)
-        if not plan and self.instance:
-            plan = getattr(self.instance, 'production_plan', None)
-            
-        # 3. Tretia možnosť: Rodičovský Serializer (Ak je kontext prázdny)
-        # Niekedy je inštancia rodičovského seriálizátora k dispozícii.
-        if not plan:
-            parent_serializer = self.context.get('parent')
-            if parent_serializer and getattr(parent_serializer, 'instance', None):
-                plan = parent_serializer.instance
-                
-        # 4. Štvrtá možnosť: Ak bol plán poslaný ako ID v dátach (len pre CREATE)
-        if not plan and hasattr(self, 'initial_data'):
-            # Toto sa spustí, len ak seriálizátor ešte nebol validovaný
-            plan_id = self.initial_data.get("production_plan") 
-            if plan_id:
-                plan = plan_id # Bude spracované v kroku 5
-
-        # Ladiaci výstup – zistíme, či bol nejaký zdroj nájdený
-        plan_source = "Nenájdený"
-        if plan:
-            if isinstance(plan, ProductionPlan):
-                plan_source = f"Model ID {plan.id}"
-            else:
-                plan_source = f"ID/Int: {plan}"
-                
-        print(f"DEBUG_DATE_VALIDATION: Plán (pred načítaním) zdroj: {plan_source}")
-
-
-        # 5. Načítanie objektu, ak máme iba ID/Int
-        if plan and not isinstance(plan, ProductionPlan):
-            try:
-                plan_id = getattr(plan, 'id', plan) # Získa ID, ak je to model, inak použije hodnotu
-                plan = ProductionPlan.objects.get(id=plan_id)
-            except ProductionPlan.DoesNotExist:
-                raise serializers.ValidationError(
-                    f"Referencovaný výrobný plán (ID: {plan_id}) nebol nájdený."
-                )
-            except ValueError:
-                raise serializers.ValidationError(
-                    "Neplatná referencia na výrobný plán."
-                )
-        
-        if not plan or not isinstance(plan, ProductionPlan):
-            raise serializers.ValidationError(
-                "Nie je dostupný production_plan pre validáciu dátumu."
-            )
-
-
-        # 6. Finálna validácia rozsahu dátumu
-        if not (plan.start_date <= value <= plan.end_date):
-            raise serializers.ValidationError(
-                f"Dátum položky musí byť v rozsahu výrobného plánu: {plan.start_date} – {plan.end_date}"
-            )
-
-        return value
-    
-    
-    def validate_product(self, value):
-        """Zabezpečí, že sa použije len produkt typu 'výrobok'."""
-        if value.product_type.name != "Výrobok":
-            raise serializers.ValidationError("Do plánu výroby je možné pridať iba produkt typu 'Výrobok'.")
-        return value
     
     def get_ingredients_status(self, obj):
-            # vypočíta dostupnosť každej suroviny
-            result = []
-            for link in obj.product.ingredients_links.all():
-                ingredient = link.ingredient
-                required_qty = obj.planned_quantity * link.quantity
-                result.append({
-                    "ingredient": ingredient.product_name,
-                    "required_qty": required_qty,
-                    "available_qty": ingredient.free_quantity,
-                    "is_sufficient": ingredient.free_quantity >= required_qty
-                })
-            return result
+        result = []
+        for link in obj.product.ingredients_links.all():
+            ingredient = link.ingredient
+            required_qty = obj.planned_quantity * link.quantity
+            result.append({
+                "ingredient": ingredient.product_name,
+                "required_qty": required_qty,
+                "available_qty": ingredient.free_quantity,
+                "is_sufficient": ingredient.free_quantity >= required_qty
+            })
+        return result
 
+    def validate(self, data):
+        # 1. Zistíme STATUS V DATABÁZE (nie ten, čo posielame)
+        db_status = self.instance.status if self.instance else None
+        
+        # 2. Zistíme NOVÝ STATUS (ktorý chce užívateľ nastaviť)
+        incoming_status = data.get('status')
 
-    # V ProductionPlanItemSerializer
+        # Zoznam stavov, pri ktorých je položka považovaná za "uzamknutú"
+        FINAL_STATUSES = ["completed", "canceled", "in_production", "partially completed"] 
 
-    def update(self, instance, validated_data):
+        # --- KONTROLA ---
         
-        
-        instance = super().update(instance, validated_data) 
-        
-        
-        if 'transfered_pcs' in validated_data or 'planned_quantity' in validated_data:
+        # Ak je položka v DB už v nejakom finálnom stave...
+        if db_status in FINAL_STATUSES:
             
-            # Hodnoty sú už uložené v instance po super().update()
-            if instance.transfered_pcs >= instance.planned_quantity:
-                instance.status = "completed"
-            elif instance.transfered_pcs > 0:
-                instance.status = "partially completed"
-            else:
-                instance.status = "pending"
+            # VÝNIMKA: Ak chceme položku ZRUŠIŤ (nastaviť na canceled), tak to povolíme.
+            # Ale povolíme to len vtedy, ak sa mení IBA status, nie množstvá a pod.
+            if incoming_status == 'canceled':
+                # Skontrolujeme, či sa užívateľ nesnaží "popri tom" zmeniť aj iné dôležité polia
+                forbidden_fields_when_canceling = [
+                    "planned_quantity", "planned_date", "transfered_pcs", "product"
+                ]
+                if any(field in data for field in forbidden_fields_when_canceling):
+                    raise serializers.ValidationError({
+                        'non_field_errors': ["Pri rušení položky nie je možné meniť jej parametre (množstvo, dátum...)."]
+                    })
                 
-            instance.save(update_fields=['status']) # Uloženie len zmeneného statusu
+                # Ak je všetko OK, pustíme dáta ďalej (status sa zmení na canceled)
+                return data
+
+            # Ak to NIE JE zrušenie (napr. sa snaží zmeniť množstvo, alebo status na iný), 
+            # tak platí prísny zákaz zmien.
             
-        # Ak sa menili iné polia (napr. planned_date), zmena prebehla už v super().update()
+            updatable_fields = [
+                "planned_quantity", 
+                "planned_date", 
+                "transfered_pcs", 
+                "product",
+                "status" # Tu už status zakážeme, lebo vyššie sme ošetrili 'canceled'
+            ]
             
-        return instance
+            is_attempting_important_change = any(
+                field in data for field in updatable_fields
+            )
+            
+            if is_attempting_important_change:
+                raise serializers.ValidationError({
+                    'non_field_errors': [f"Nie je možné meniť položku so statusom '{db_status}'. Položka je uzamknutá."]
+                })
+
+        return data
+        
+        def validate_planned_date(self, value):
+            """
+            Skontroluje, či dátum položky je v rozsahu výrobného plánu.
+            Táto verzia pokrýva všetky scenáre (Create, Update, Nested Update)
+            a využíva ladiace výstupy na presné zistenie zdroja Plánu.
+            """
+            
+            plan = None
+            
+            # 1. Priorita: Kontext (Najspoľahlivejší pri NESTED operáciách z ProductionPlanSerializer)
+            plan = self.context.get("production_plan")
+            
+            # 2. Sekundárne: Existujúca inštancia (Pre update už existujúcich položiek)
+            if not plan and self.instance:
+                plan = getattr(self.instance, 'production_plan', None)
+                
+            # 3. Tretia možnosť: Rodičovský Serializer (Ak je kontext prázdny)
+            # Niekedy je inštancia rodičovského seriálizátora k dispozícii.
+            if not plan:
+                parent_serializer = self.context.get('parent')
+                if parent_serializer and getattr(parent_serializer, 'instance', None):
+                    plan = parent_serializer.instance
+                    
+            # 4. Štvrtá možnosť: Ak bol plán poslaný ako ID v dátach (len pre CREATE)
+            if not plan and hasattr(self, 'initial_data'):
+                # Toto sa spustí, len ak seriálizátor ešte nebol validovaný
+                plan_id = self.initial_data.get("production_plan") 
+                if plan_id:
+                    plan = plan_id # Bude spracované v kroku 5
+
+            # Ladiaci výstup – zistíme, či bol nejaký zdroj nájdený
+            plan_source = "Nenájdený"
+            if plan:
+                if isinstance(plan, ProductionPlan):
+                    plan_source = f"Model ID {plan.id}"
+                else:
+                    plan_source = f"ID/Int: {plan}"
+                    
+            print(f"DEBUG_DATE_VALIDATION: Plán (pred načítaním) zdroj: {plan_source}")
+
+
+            # 5. Načítanie objektu, ak máme iba ID/Int
+            if plan and not isinstance(plan, ProductionPlan):
+                try:
+                    plan_id = getattr(plan, 'id', plan) # Získa ID, ak je to model, inak použije hodnotu
+                    plan = ProductionPlan.objects.get(id=plan_id)
+                except ProductionPlan.DoesNotExist:
+                    raise serializers.ValidationError(
+                        f"Referencovaný výrobný plán (ID: {plan_id}) nebol nájdený."
+                    )
+                except ValueError:
+                    raise serializers.ValidationError(
+                        "Neplatná referencia na výrobný plán."
+                    )
+            
+            if not plan or not isinstance(plan, ProductionPlan):
+                raise serializers.ValidationError(
+                    "Nie je dostupný production_plan pre validáciu dátumu."
+                )
+
+
+            # 6. Finálna validácia rozsahu dátumu
+            if not (plan.start_date <= value <= plan.end_date):
+                raise serializers.ValidationError(
+                    f"Dátum položky musí byť v rozsahu výrobného plánu: {plan.start_date} – {plan.end_date}"
+                )
+
+            return value
+        
+        
+        def validate_product(self, value):
+            """Zabezpečí, že sa použije len produkt typu 'výrobok'."""
+            if value.product_type.name != "Výrobok":
+                raise serializers.ValidationError("Do plánu výroby je možné pridať iba produkt typu 'Výrobok'.")
+            return value
+        
+        def get_ingredients_status(self, obj):
+                # vypočíta dostupnosť každej suroviny
+                result = []
+                for link in obj.product.ingredients_links.all():
+                    ingredient = link.ingredient
+                    required_qty = obj.planned_quantity * link.quantity
+                    result.append({
+                        "ingredient": ingredient.product_name,
+                        "required_qty": required_qty,
+                        "available_qty": ingredient.free_quantity,
+                        "is_sufficient": ingredient.free_quantity >= required_qty
+                    })
+                return result
+
+
+        # V ProductionPlanItemSerializer
+
+        def update(self, instance, validated_data):
+            
+            
+            instance = super().update(instance, validated_data) 
+            
+            
+            if 'transfered_pcs' in validated_data or 'planned_quantity' in validated_data:
+                
+                # Hodnoty sú už uložené v instance po super().update()
+                if instance.transfered_pcs >= instance.planned_quantity:
+                    instance.status = "completed"
+                elif instance.transfered_pcs > 0:
+                    instance.status = "partially completed"
+                else:
+                    instance.status = "pending"
+                    
+                instance.save(update_fields=['status']) # Uloženie len zmeneného statusu
+                
+            # Ak sa menili iné polia (napr. planned_date), zmena prebehla už v super().update()
+                
+            return instance
 
 
 # -----------------------
@@ -889,6 +902,14 @@ class StockReceiptSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source="product.product_name", read_only=True)
     created_by_name = serializers.StringRelatedField(source="created_by", read_only=True)
 
+    production_plan = serializers.PrimaryKeyRelatedField(read_only=True)
+
+  
+    production_card = serializers.PrimaryKeyRelatedField(
+        queryset=ProductionCard.objects.all(),
+        required=False,
+        allow_null=True
+    )
     class Meta:
         model = StockReceipt
         fields = [
@@ -929,3 +950,43 @@ class ProductForProductPlanSerializer(serializers.ModelSerializer):
             'reserved_quantity', 'free_quantity', 'minimum_on_stock'
         ]
         read_only_fields = fields  # všetko read-only
+
+
+
+
+class ProductionPlanItemsSerializer(serializers.ModelSerializer):
+    plan_number = serializers.CharField(source='production_plan.plan_number', read_only=True)
+    class Meta:
+        model = ProductionPlanItem
+        fields = ('id', 
+            'production_plan', 
+            'plan_number', # <-- Pridané nové pole!
+            'product', 
+            'product_id', 
+            'product_name', 
+            'planned_quantity', 
+            'planned_date', 
+            'status', 
+            'production_card', 
+            'ingredients_status', 
+            'transfered_pcs')
+
+# angelapp/serializers.py
+
+class ProductionPlansSerializer(serializers.ModelSerializer):
+    # ✅ Použi SerializerMethodField namiesto ModelSerializer
+    items = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = ProductionPlan
+        fields = ('id','start_date','end_date','items','plan_number')
+
+    # ✅ Metóda na získanie a filtrovanie ITEMS
+    def get_items(self, obj):
+        # 1. Filtruj vnorené položky
+        active_items = obj.items.exclude(
+            status__in=['completed', 'canceled']
+        )
+        
+        # 2. Serializuj iba filtrovaný QuerySet
+        return ProductionPlanItemSerializer(active_items, many=True).data

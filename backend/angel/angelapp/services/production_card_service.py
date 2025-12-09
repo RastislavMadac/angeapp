@@ -1,5 +1,6 @@
 from decimal import Decimal
 from django.db import transaction
+from django.db.models import Max
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
@@ -11,104 +12,82 @@ from angelapp.models import (
 )
 
 
-
 class ProductionCardService:
-    """
-    Service layer for ProductionCard operations to keep ViewSet thin and testable.
-    """
-
-    print("ProductionCardService je spustená")
 
     @staticmethod
-    def generate_card_number():
-        """
-        Generuje číslo výrobnej karty vo formáte RRRRVKNNNN (napr. 2025VK0001).
-        """
+    @transaction.atomic
+    def generate_card_number() -> str:
+        """Generovanie čísla výrobnej karty RRRRVKNNNN."""
         current_year = timezone.now().year
         prefix = f"{current_year}VK"
-        last_card = ProductionCard.objects.filter(card_number__startswith=prefix).order_by("card_number").last()
-        
-        last_number = int(last_card.card_number[-4:]) if last_card and last_card.card_number[-4:].isdigit() else 0
-        
+
+        last_card_number = (
+            ProductionCard.objects
+            .filter(card_number__startswith=prefix)
+            .select_for_update()
+            .aggregate(max_num=Max('card_number'))
+        )['max_num']
+
+        if last_card_number and last_card_number[-4:].isdigit():
+            last_number = int(last_card_number[-4:])
+        else:
+            last_number = 0
+
         return f"{prefix}{str(last_number + 1).zfill(4)}"
 
     @staticmethod
-    def generate_receipt_number():
-        """
-        Generuje číslo príjemky vo formáte RRRRPJNNNN (napr. 2025PJ0001).
-        Hľadá posledné použité číslo v tabuľke StockReceipt.
-        """
+    @transaction.atomic
+    def generate_receipt_number() -> str:
+        """Generovanie čísla príjemky RRRRPJNNNN."""
         current_year = timezone.now().year
         prefix = f"{current_year}PJ"
-        
-        # Nájde akýkoľvek záznam s najvyšším číslom príjemky pre daný rok
-        last_receipt = StockReceipt.objects.filter(receipt_number__startswith=prefix).order_by("receipt_number").last()
-        
-        if last_receipt:
-            try:
-                # Vezme posledné 4 znaky a prevedie na číslo
-                last_number = int(last_receipt.receipt_number[-4:])
-            except ValueError:
-                last_number = 0
+
+        last_receipt_number = (
+            StockReceipt.objects
+            .filter(receipt_number__startswith=prefix)
+            .select_for_update()
+            .aggregate(max_num=Max('receipt_number'))
+        )['max_num']
+
+        if last_receipt_number and last_receipt_number[-4:].isdigit():
+            last_number = int(last_receipt_number[-4:])
         else:
             last_number = 0
-            
+
         return f"{prefix}{str(last_number + 1).zfill(4)}"
 
     @staticmethod
     @transaction.atomic
     def create_production_card(plan_item: ProductionPlanItem, requested_qty: int, user) -> ProductionCard:
-        """
-        Creates ProductionCard, updates plan_item.transfered_pcs and validates recipe/stock.
-        Raises ValidationError on problems.
-        """
-        
-        # 1. Výpočet dostupného množstva z plánu
+        """Vytvorenie výrobnej karty a update výrobného plánu."""
         available_qty = max(plan_item.planned_quantity - plan_item.transfered_pcs, 0)
-        
         if requested_qty is None:
             requested_qty = available_qty
 
-        # 2. Validácia množstiev (MUSÍ BYŤ PRVÁ)
-        # Najskôr skontrolujeme, či vôbec môžeme toľko vyrobiť podľa plánu.
         if requested_qty <= 0:
             raise ValidationError("Požadované množstvo musí byť väčšie ako 0.")
-
         if requested_qty > available_qty:
-            raise ValidationError(f"Nemožno preniesť {requested_qty} ks – podľa plánu ostáva vyrobiť len {available_qty} ks.")
+            raise ValidationError(f"Nemožno preniesť {requested_qty} ks – dostupných len {available_qty} ks.")
 
         product = plan_item.product
 
-        # 3. Kontrola receptúry a skladu (Až keď prejde kontrola plánu)
+        # Kontrola receptúry (ak nie je surovina)
         if product.product_type.name.lower() != "surovina":
             recipe_items = ProductIngredient.objects.filter(product=product)
             if not recipe_items.exists():
-                raise ValidationError(f"Produkt '{product.product_name}' nemá definovanú receptúru (žiadne suroviny).")
-
+                raise ValidationError(f"Produkt '{product.product_name}' nemá definovanú receptúru.")
             missing = []
             for ri in recipe_items:
                 ingredient = ri.ingredient
-                required = (Decimal(ri.quantity) * Decimal(requested_qty))
-                # Len kontrolujeme dostupnosť, ešte nerezervujeme (aby nevyhodilo ValueError)
-                available = Decimal(ingredient.available_quantity())
-                
-                if available < required:
-                    missing.append({
-                        "ingredient": ingredient.product_name,
-                        "required": float(required),
-                        "available": float(available),
-                    })
-            
+                required = Decimal(ri.quantity) * Decimal(requested_qty)
+                if Decimal(ingredient.available_quantity()) < required:
+                    missing.append({"ingredient": ingredient.product_name, "required": float(required),
+                                    "available": float(ingredient.available_quantity())})
             if missing:
-                raise ValidationError({
-                    "detail": "Nie je dostatok surovín na sklade pre túto výrobu.",
-                    "missing_materials": missing,
-                })
+                raise ValidationError({"detail": "Nie je dostatok surovín", "missing_materials": missing})
 
-        # 4. Generovanie čísla karty
         card_number = ProductionCardService.generate_card_number()
 
-        # 5. Vytvorenie karty
         card = ProductionCard.objects.create(
             plan_item=plan_item,
             card_number=card_number,
@@ -117,10 +96,10 @@ class ProductionCardService:
             defective_quantity=0,
             status="in_production",
             created_by=user,
-            updated_by=user,
+            updated_by=user
         )
 
-        # 6. Update plánu
+        # Update výrobného plánu
         plan_item.transfered_pcs += requested_qty
         if plan_item.transfered_pcs >= plan_item.planned_quantity:
             plan_item.status = "completed"
@@ -128,83 +107,62 @@ class ProductionCardService:
             plan_item.status = "partially completed"
         else:
             plan_item.status = "pending"
-        
-        plan_item.production_card = card
-        plan_item.save()
+        plan_item.save(update_fields=["transfered_pcs", "status"])
 
         return card
 
     @staticmethod
     @transaction.atomic
-    def update_produced_quantity(card: ProductionCard, new_produced: int, user) -> ProductionCard:
-        """
-        Increment produced quantity, update product/ingredients, create stock receipts.
-        Uses one receipt number (YYYYPJNNNN) for the whole transaction.
-        """
-        if new_produced < card.produced_quantity:
-            raise ValidationError("Nie je povolené znižovať vyrobené množstvo.")
+    def _recalculate_status(card: ProductionCard) -> str:
+        """Určí status podľa množstva vyrobeného vs. plánovaného."""
+        planned = card.planned_quantity
+        produced_total = card.produced_quantity + card.defective_quantity
 
-        diff = new_produced - card.produced_quantity
-        if diff == 0:
-            return card
+        if produced_total > planned:
+            raise ValidationError({"produced_quantity": f"Celkové množstvo ({produced_total}) presahuje plán ({planned})."})
+        if produced_total == 0:
+            return "pending"
+        if produced_total < planned:
+            return "partially_completed"
+        return "completed"
 
-        product = card.plan_item.product
+    @staticmethod
+    @transaction.atomic
+    def update_produced_quantity(card: ProductionCard, added_quantity: int, user) -> ProductionCard:
+        """Kumulatívny update množstva + automatická príjemka + rezervácia surovín."""
+        if added_quantity <= 0:
+            raise ValidationError({"produced_quantity": "Množstvo musí byť väčšie ako 0."})
 
-        # 1. Update karty
-        card.produced_quantity = new_produced
-        if card.produced_quantity >= card.planned_quantity:
-            card.status = "completed"
-        elif card.produced_quantity > 0:
-            card.status = "partially completed"
-        else:
-            card.status = "in_production"
-
+        # 1️⃣ Update množstva a status
+        card.produced_quantity += added_quantity
         card.updated_by = user
-        card.save()
+        card.updated_at = timezone.now()
+        card.status = ProductionCardService._recalculate_status(card)
+        card.save(update_fields=["produced_quantity", "status", "updated_by", "updated_at"])
 
-        # 2. Príprava pre skladové pohyby
-        produced_qty = Decimal(diff)
-
-        # Pripísanie hotového výrobku na sklad
-        product.add_production(produced_qty)
-
-        # Rezervácia / spotreba surovín
-        recipe_items = ProductIngredient.objects.filter(product=product)
-        for ri in recipe_items:
-            ingredient = ri.ingredient
-            required_qty = Decimal(ri.quantity) * produced_qty
-            # Tu sa reálne odpíše/rezervuje množstvo v modeli
-            ingredient.reserve(required_qty)
-
-        # 3. Vytvorenie príjemky a výdajok
-        # Generujeme číslo LEN RAZ pre celú transakciu
+        # 2️⃣ Vytvorenie StockReceipt
         receipt_number = ProductionCardService.generate_receipt_number()
+        production_plan = getattr(card.plan_item, "production_plan", None)
 
-        # A) Príjemka hlavného produktu (Kladné množstvo)
-        StockReceipt.objects.create(
+        stock_receipt = StockReceipt.objects.create(
             receipt_number=receipt_number,
+            production_plan=production_plan,
             production_card=card,
-            production_plan=card.plan_item.production_plan,
-            product=product,
-            quantity=produced_qty,
-            created_by=user,
-            notes=f"Automatická príjemka z výrobnej karty {card.card_number}",
+            product=card.plan_item.product,
+            quantity=added_quantity,
+            created_by=user
         )
 
-        # B) Výdajky surovín (Záporné množstvo, pod tým istým číslom)
-        for ri in recipe_items:
-            used_qty = Decimal(ri.quantity) * produced_qty
-            StockReceipt.objects.create(
-                receipt_number=receipt_number,
-                production_card=card,
-                production_plan=card.plan_item.production_plan,
-                product=ri.ingredient,
-                quantity=-used_qty,
-                created_by=user,
-                notes=f"Surovina spotrebovaná pri výrobe {product.product_name}",
-            )
+        # 3️⃣ Rezervácia ingrediencií podľa receptúry
+        product = card.plan_item.product
+        recipe_links = ProductIngredient.objects.filter(product=product)
+        for link in recipe_links:
+            ingredient = link.ingredient
+            required_qty = Decimal(link.quantity) * Decimal(added_quantity)
+            ingredient.reserved_quantity += required_qty
+            ingredient.update_available()
 
-        card.stock_receipt_created = True
-        card.save(update_fields=["stock_receipt_created", "produced_quantity", "status", "updated_by"])
+        # 4️⃣ Aplikovanie príjemky do skladu
+        stock_receipt.apply_to_stock()
 
         return card

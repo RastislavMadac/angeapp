@@ -60,16 +60,16 @@ class ProductInstanceAdmin(admin.ModelAdmin):
     list_filter = ("id","product", "serial_number")
     search_fields = ("id","product", "serial_number")
 
-# @admin.register(ProductType)
-# class ProductTypeAdmin(admin.ModelAdmin):
-#     list_display = ("id","name", "description")
-#     list_filter = ("id","name", "description")
-#     search_fields = ("id","name", "description")
-# @admin.register(City)
-# class CityAdmin(admin.ModelAdmin):
-#     list_display = ("id","name", "postal_code", "country")
-#     list_filter =  ("id","name", "postal_code", "country")
-#     search_fields =  ("id","name", "postal_code", "country")
+@admin.register(ProductType)
+class ProductTypeAdmin(admin.ModelAdmin):
+    list_display = ("id","name", "description")
+    list_filter = ("id","name", "description")
+    search_fields = ("id","name", "description")
+@admin.register(City)
+class CityAdmin(admin.ModelAdmin):
+    list_display = ("id","name", "postal_code", "country")
+    list_filter =  ("id","name", "postal_code", "country")
+    search_fields =  ("id","name", "postal_code", "country")
 
 @admin.register(Company)
 class CompanyAdmin(admin.ModelAdmin):
