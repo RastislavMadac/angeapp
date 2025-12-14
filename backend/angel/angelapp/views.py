@@ -7,8 +7,13 @@ from django.forms import ValidationError
 from django.utils import timezone
 from django.shortcuts import render
 from rest_framework import viewsets,filters
+
+from angelapp.services.stock_issue_service import StockIssueService
+
+
+from angelapp.permissions import IsAdminOrManager, IsAdmin
 from .models import User,ProductType, Category, Unit, Product,ProductInstance,ProductIngredient,Company,Order,OrderItem,ProductionCard,ProductionPlan,ProductionPlanItem,StockReceipt
-from .serializers import ProductionPlansSerializer, UserSerializer,ProductTypeSerializer, CategorySerializer, UnitSerializer, ProductSerializer,ProductInstanceSerializer,ProductIngredientSerializer,CompanySerializer,OrderItemSerializer,OrderSerializer,  ProductionPlanSerializer,ProductionPlanItemSerializer,    ProductionCardSerializer,StockReceiptSerializer,ProductForProductPlanSerializer
+from .serializers import ProductionPlansSerializer, UserSerializer,ProductTypeSerializer, CategorySerializer, UnitSerializer, ProductSerializer,ProductInstanceSerializer,ProductIngredientSerializer,CompanySerializer,OrderItemSerializer,OrderSerializer,  ProductionPlanSerializer,ProductionPlanItemSerializer,    ProductionCardSerializer,StockReceiptSerializer,ProductForProductPlanSerializer,StockIssueSerializer,StockIssue
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied
@@ -223,7 +228,7 @@ class CompanyViewSet(viewsets.ModelViewSet):
 # -----------------------
 
 class OrderViewSet(viewsets.ModelViewSet):
-    queryset = Order.objects.all()  # <- pridaj toto, kvôli routeru
+    queryset = Order.objects.all()
     serializer_class = OrderSerializer
     permission_classes = [IsAuthenticated]
 
@@ -242,7 +247,6 @@ class OrderViewSet(viewsets.ModelViewSet):
         else:
             return Order.objects.none()
 
-
     def perform_create(self, serializer):
         serializer.save(created_who=self.request.user, edited_who=self.request.user)
 
@@ -250,6 +254,50 @@ class OrderViewSet(viewsets.ModelViewSet):
         if serializer.instance.status in ["completed", "canceled"]:
             raise PermissionDenied("You cannot edit a completed or canceled order.")
         serializer.save(edited_who=self.request.user)
+
+   
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="create-stock-issue",
+        permission_classes=[IsAuthenticated, IsAdminOrManager],
+    )
+    def create_stock_issue(self, request, pk=None):
+        order = self.get_object()
+
+        # bezpečnostné kontroly
+        if order.status == "canceled":
+            return Response(
+                {"detail": "Objednávka je zrušená"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if order.stock_issues.exists():
+            return Response(
+                {"detail": "Pre túto objednávku už existuje výdajka"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            stock_issue = StockIssueService.create_from_order(order, request.user)
+        except ValueError as e:
+            return Response(
+                {"detail": str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # voliteľne zmeníme stav objednávky
+        order.status = "processing"
+        order.save(update_fields=["status"])
+
+        return Response(
+            {
+                "detail": "Výdajka bola úspešne vytvorená",
+                "stock_issue_id": stock_issue.id,
+            },
+            status=status.HTTP_201_CREATED
+        )
+
 # -----------------------
 # order Item
 # -----------------------
@@ -598,7 +646,11 @@ class ProductionCardViewSet(ModelViewSet):
             "warnings": warnings
         }
 
-
+    def destroy(self, request, *args, **kwargs):
+            card = self.get_object()
+            if not card.can_be_deleted():
+                raise DRFValidationError("Kartu s týmto statusom nemožno vymazať.")
+            return super().destroy(request, *args, **kwargs)
 
 # -----------------------
 # StockReceiptViewSet
@@ -892,3 +944,77 @@ class ProductForProductPlanViewSet(viewsets.ReadOnlyModelViewSet):
         print(f"Count: {qs.count()}")  # počet objektov v queryset
         return qs
 
+
+
+
+# -----------------------
+# StockIssueViewSet
+# -----------------------
+
+
+
+class StockIssueViewSet(ModelViewSet):
+    queryset = (
+        StockIssue.objects
+        .all()
+        .prefetch_related("items", "items__instances")
+    )
+    serializer_class = StockIssueSerializer
+    permission_classes = [IsAuthenticated, IsAdminOrManager]
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+    # ==============================
+    # ✅ VYTVORENIE VÝDAJKY Z OBJEDNÁVKY
+    # ==============================
+    @action(detail=False, methods=["post"], url_path="from-order")
+    def create_from_order(self, request):
+        order_id = request.data.get("order_id")
+
+        if not order_id:
+            return Response(
+                {"detail": "order_id je povinný"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            order = Order.objects.get(id=order_id)
+        except Order.DoesNotExist:
+            return Response(
+                {"detail": "Objednávka neexistuje"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        try:
+            stock_issue = StockIssueService.create_from_order(
+                order=order,
+                user=request.user
+            )
+        except ValueError as e:
+            return Response(
+                {"detail": str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer = self.get_serializer(stock_issue)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    # ==============================
+    # 🔄 STORNO VÝDAJKY
+    # ==============================
+    @action(detail=True, methods=["post"], url_path="storno")
+    def storno_issue(self, request, pk=None):
+        issue = self.get_object()
+        try:
+            issue.storno()
+        except ValueError as e:
+            return Response(
+                {"detail": str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        return Response(
+            {"detail": "Výdajka bola úspešne stornovaná"},
+            status=status.HTTP_200_OK
+        )

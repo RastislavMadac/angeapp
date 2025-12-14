@@ -31,7 +31,7 @@ class User(AbstractUser):
 class ProductType(models.Model):
     name= models.CharField(max_length=50, unique=True)
     description = models.TextField(blank=True, null=True)
-
+    code = models.CharField(max_length=30, null=True)
     def __str__(self):
         return self.name
 # -----------------------
@@ -103,7 +103,33 @@ class Product(models.Model):
 
    
 
-    
+ 
+    @transaction.atomic
+    def issue(self, qty: int):
+        """
+        Výdaj zo skladu (výrobok / tovar / surovina)
+        - zníži total_quantity
+        - zníži reserved_quantity
+        - prepočíta free_quantity
+        """
+        # blokujeme riadok produktu pre túto transakciu
+        product = Product.objects.select_for_update().get(id=self.id)
+
+        if qty <= 0:
+            raise ValueError("Quantity must be greater than zero")
+
+        if qty > product.reserved_quantity:
+            raise ValueError(f"Nedostatok rezervovaného množstva: {product.product_name}")
+
+        if qty > product.total_quantity:
+            raise ValueError(f"Nedostatok celkového množstva: {product.product_name}")
+
+        product.total_quantity -= qty
+        product.reserved_quantity -= qty
+        product.update_available()
+
+  
+
     def add_production(self, qty: float):
         """Pridá vyrobené množstvo do skladu a prepočíta free_quantity"""
         self.total_quantity += qty
@@ -459,7 +485,14 @@ class ProductionCard(models.Model):
         """Koľko ešte treba vyrobiť, aby karta bola dokončená"""
         return max(self.planned_quantity - self.produced_quantity - self.defective_quantity, 0)
 
-    
+    def can_be_deleted(self):
+        """True, ak kartu možno vymazať."""
+        return self.status not in ['completed', 'canceled', 'partially_completed']
+
+    def delete(self, *args, **kwargs):
+        if not self.can_be_deleted():
+            raise ValidationError("Kartu s týmto statusom nemožno vymazať.")
+        super().delete(*args, **kwargs)
 
 
 #-----------------------
@@ -528,4 +561,105 @@ class StockReceipt(models.Model):
         return True
 
     
+
+
+class StockIssue(models.Model):
+ 
+
+    issue_number = models.CharField(max_length=30, unique=True)
+    order = models.ForeignKey(
+        Order,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="stock_issues"
+    )
+
+    issued_at = models.DateTimeField(auto_now_add=True)
+
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="stock_issues_created"
+    )
+
+    status = models.CharField(max_length=20, default='issued')
+
+    note = models.TextField(blank=True, null=True)
+    is_storno = models.BooleanField(default=False)
+    def __str__(self):
+        return f"StockIssue {self.issue_number}"
+
+    @transaction.atomic
+    def issue(self):
+        for item in self.items.select_related("product"):
+            item.product.issue(item.quantity)
+
+            if item.product.is_serialized:
+                for instance in item.instances.all():
+                    instance.status = "shipped"
+                    instance.save(update_fields=["status"])
     
+    @transaction.atomic
+    def storno(self):
+        if self.status == 'storno':
+            raise ValueError("Výdajka už bola stornovaná")
+
+        for item in self.items.select_related("product"):
+            product = item.product.__class__.objects.select_for_update().get(id=item.product.id)
+
+            # vrátime množstvo späť do skladu
+            product.total_quantity += item.quantity
+            product.reserved_quantity += item.quantity
+            product.update_available()
+
+            # serializované produkty
+            if product.is_serialized:
+                for instance in item.instances.all():
+                    instance.status = 'assigned'  # alebo pôvodný stav
+                    instance.save(update_fields=["status"])
+
+        self.status = 'storno'
+        self.save(update_fields=["status"])
+
+class StockIssueItem(models.Model):
+    stock_issue = models.ForeignKey(
+        StockIssue,
+        on_delete=models.CASCADE,
+        related_name="items"
+    )
+
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.PROTECT
+    )
+
+    quantity = models.PositiveIntegerField()
+
+    order_item = models.ForeignKey(
+        OrderItem,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True
+    )
+
+    def __str__(self):
+        return f"{self.quantity} x {self.product.product_name}"
+
+
+class StockIssueInstance(models.Model):
+    stock_issue_item = models.ForeignKey(
+        StockIssueItem,
+        on_delete=models.CASCADE,
+        related_name="instances"
+    )
+
+    product_instance = models.OneToOneField(
+        ProductInstance,
+        on_delete=models.PROTECT
+    )
+
+    def __str__(self):
+        return f"{self.product_instance.serial_number}"
+

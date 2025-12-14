@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import User, Product, ProductType, Category, Unit,ProductInstance,ProductIngredient,City,Company,Order,OrderItem,ProductionPlan, ProductionPlanItem, ProductionCard, StockReceipt
+from .models import User, Product, ProductType, Category, Unit,ProductInstance,ProductIngredient,City,Company,Order,OrderItem,ProductionPlan, ProductionPlanItem, ProductionCard, StockReceipt,StockIssue,StockIssueItem
 from django.utils.translation import gettext_lazy as _
 
 @admin.register(User)
@@ -85,6 +85,15 @@ class OrderItemAdmin(admin.ModelAdmin):
     list_display = ("id", "product", "quantity", "price", "total_price")
     readonly_fields = ("total_price",)
 
+
+class OrderItemInline(admin.TabularInline):
+    model = OrderItem
+    extra = 0
+
+class StockIssueInline(admin.TabularInline):
+    model = StockIssue
+    extra = 0
+    readonly_fields = ("issue_number", "status", "issued_at")
 # -----------------------
 # Order
 # -----------------------
@@ -109,7 +118,10 @@ class OrderAdmin(admin.ModelAdmin):
     display_items.short_description = "Items"
 
         # Voliteľne: inline pre rýchle úpravy položiek
-    inlines = []
+    inlines = [
+            OrderItemInline,
+            StockIssueInline,  
+        ]
 
 # -----------------------
 # Inline OrderItem pre Order
@@ -181,3 +193,41 @@ class StockReceiptAdmin(admin.ModelAdmin):
     search_fields = ("receipt_number", "invoice_number", "product__product_name")
     autocomplete_fields = ("product", "production_card", "production_plan", "created_by")
     ordering = ("-receipt_date",)
+
+
+class StockIssueItemInline(admin.TabularInline):
+    model = StockIssueItem
+    extra = 0
+    readonly_fields = ("product", "quantity", "order_item")
+@admin.register(StockIssue)
+class StockIssueAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "issue_number",
+        "order",
+        "status",
+        "created_by",
+        "issued_at",
+    )
+    list_filter = ("status", "issued_at")
+    search_fields = ("issue_number", "order__id")
+    readonly_fields = (
+        "issue_number",
+        "order",
+        "created_by",
+        "issued_at",
+        "status",
+    )
+    inlines = [StockIssueItemInline]
+
+    def has_add_permission(self, request):
+        # výdajky sa vytvárajú len cez systém
+        return False
+@admin.register(StockIssueItem)
+class StockIssueItemAdmin(admin.ModelAdmin):
+    list_display = ("stock_issue", "product", "quantity")
+    search_fields = ("stock_issue__issue_number", "product__product_name")
+class StockIssueInline(admin.TabularInline):
+    model = StockIssue
+    extra = 0
+    readonly_fields = ("issue_number", "status", "issued_at")

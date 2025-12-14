@@ -1,12 +1,12 @@
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
-from .models import User,Product, ProductType, Category, Unit,ProductInstance,ProductIngredient, Company,Order,OrderItem,StockReceipt,ProductionPlanItem,ProductionPlan,ProductionCard
+from .models import User,Product, ProductType, Category, Unit,ProductInstance,ProductIngredient, Company,Order,OrderItem,StockReceipt,ProductionPlanItem,ProductionPlan,ProductionCard,StockIssue, StockIssueItem
 from rest_framework.authtoken.models import Token
 import re
 from django.core.exceptions import ObjectDoesNotExist
 from django.utils import timezone
 from rest_framework.exceptions import APIException
-
+from django.db import transaction
 
 # USERS
 class UserSerializer(serializers.ModelSerializer):
@@ -952,7 +952,9 @@ class ProductForProductPlanSerializer(serializers.ModelSerializer):
         read_only_fields = fields  # všetko read-only
 
 
-
+# -----------------------
+# ProductionPlanItemsSerializer
+# -----------------------
 
 class ProductionPlanItemsSerializer(serializers.ModelSerializer):
     plan_number = serializers.CharField(source='production_plan.plan_number', read_only=True)
@@ -971,7 +973,11 @@ class ProductionPlanItemsSerializer(serializers.ModelSerializer):
             'ingredients_status', 
             'transfered_pcs')
 
-# angelapp/serializers.py
+
+
+# -----------------------
+# ProductionPlansSerializer
+# -----------------------
 
 class ProductionPlansSerializer(serializers.ModelSerializer):
     # ✅ Použi SerializerMethodField namiesto ModelSerializer
@@ -990,3 +996,110 @@ class ProductionPlansSerializer(serializers.ModelSerializer):
         
         # 2. Serializuj iba filtrovaný QuerySet
         return ProductionPlanItemSerializer(active_items, many=True).data
+    
+
+
+# -----------------------
+# StockIssueInstanceSerializer
+# -----------------------
+
+class StockIssueInstanceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductInstance
+        fields = ["id"]
+
+
+# -----------------------
+# StockIssueItemSerializer
+# -----------------------
+class StockIssueItemSerializer(serializers.ModelSerializer):
+    instances = StockIssueInstanceSerializer(many=True, required=False)
+
+    class Meta:
+        model = StockIssueItem
+        fields = [
+            "id",
+            "product",
+            "quantity",
+            "order_item",
+            "instances",
+        ]
+
+    def validate(self, data):
+        product = data["product"]
+        qty = data["quantity"]
+        instances = data.get("instances", [])
+
+        if qty <= 0:
+            raise serializers.ValidationError("Quantity must be greater than 0")
+
+        # ak je serializovaný → počet SN musí sedieť
+        if product.is_serialized:
+            if len(instances) != qty:
+                raise serializers.ValidationError(
+                    "Number of serial numbers must match quantity"
+                )
+
+        return data
+
+
+
+# -----------------------
+# StockIssueSerializer
+# -----------------------
+class StockIssueSerializer(serializers.ModelSerializer):
+    items = StockIssueItemSerializer(many=True)
+    order_number = serializers.CharField(
+        source="order.order_number",
+        read_only=True
+    )
+
+    class Meta:
+        model = StockIssue
+        fields = [
+            "id",
+            "issue_number",
+            "order",
+            "order_number",
+            "issued_at",
+            "note",
+            "items",
+        ]
+        read_only_fields = ["issued_at"]
+
+    @transaction.atomic
+    def create(self, validated_data):
+        items_data = validated_data.pop("items")
+        user = self.context["request"].user
+
+        stock_issue = StockIssue.objects.create(
+            created_by=user,
+            **validated_data
+        )
+
+        for item_data in items_data:
+            instances_data = item_data.pop("instances", [])
+
+            issue_item = StockIssueItem.objects.create(
+                stock_issue=stock_issue,
+                **item_data
+            )
+
+            # serializované kusy
+            if issue_item.product.is_serialized:
+                for inst in instances_data:
+                    issue_item.instances.create(
+                        product_instance=inst["id"]
+                    )
+
+        # 🔥 TU sa robí bezpečný výdaj produktov
+        for item in stock_issue.items.select_related("product"):
+            item.product.issue(item.quantity)
+
+            # ak je serializovaný → zmena statusu SN
+            if item.product.is_serialized:
+                for instance in item.instances.all():
+                    instance.status = "shipped"
+                    instance.save(update_fields=["status"])
+
+        return stock_issue
