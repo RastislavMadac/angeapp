@@ -28,3 +28,30 @@ body.modal-open {
     overflow: hidden;
     /* zabráni scrollovaniu stránky */
 }
+
+/* Globálne status farby */
+
+.status-pending {
+    background-color: #95c7e9 !important;
+    border-left: 5px solid #260ff1 !important;
+}
+
+.status-processing {
+    background-color: #cfe2ff !important;
+    border-left: 5px solid #f1c40f !important;
+}
+
+.status-partial {
+    background-color: #f3b57e !important;
+    border-left: 5px solid #e67e22 !important;
+}
+
+.status-completed {
+    background-color: #88ec8d !important;
+    border-left: 5px solid #2ecc71 !important;
+}
+
+.status-canceled {
+    background-color: #f8d7da !important;
+    border-left: 5px solid #e74c3c !important;
+}

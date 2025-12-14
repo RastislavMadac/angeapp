@@ -1,63 +1,81 @@
 import { Injectable } from '@angular/core';
 import { Subject, Observable } from 'rxjs';
 
-export type NotificationType = 'success' | 'info' | 'warn' | 'error';;
+export type NotificationType = 'success' | 'info' | 'warn' | 'error';
+
+// Interface pre dáta notifikácie (pre lepšiu typovú kontrolu)
+export interface NotificationData {
+    message: string;
+    type: NotificationType;
+}
 
 @Injectable({ providedIn: 'root' })
 export class NotificationService {
 
+    // Subject pre toasty
+    private notifySubject = new Subject<NotificationData>();
 
-    // success(arg0: string) {
-    //     throw new Error('Method not implemented.');
-    // }
-    // error(arg0: string) {
-    //     throw new Error('Method not implemented.');
-    // }
-    // showSuccess(arg0: string) {
-    //     throw new Error('Method not implemented.');
-    // }
-    // showError(arg0: string) {
-    //     throw new Error('Method not implemented.');
-    // }
-
-    private notifySubject = new Subject<{ message: string, type?: NotificationType }>();
+    // Subject pre confirm modál
     private confirmSubject = new Subject<{ message: string, response: (result: boolean) => void }>();
 
-    // notifikácie
-    get notifications$(): Observable<{ message: string, type?: NotificationType }> {
+    // --- GETTERS (Observables) ---
+
+    get notifications$(): Observable<NotificationData> {
         return this.notifySubject.asObservable();
     }
+
+    get confirms$() {
+        return this.confirmSubject.asObservable();
+    }
+
+    // --- CORE METÓDA ---
 
     notify(message: string, type: NotificationType = 'info') {
         this.notifySubject.next({ message, type });
     }
 
-    // potvrdenia
-    get confirms$() {
-        return this.confirmSubject.asObservable();
+    // --- HELPER METÓDY (Skratky) ---
+
+    success(message: string) {
+        this.notify(message, 'success');
     }
+
+    error(message: string) {
+        this.notify(message, 'error');
+    }
+
+    info(message: string) {
+        this.notify(message, 'info');
+    }
+
+    warn(message: string) {
+        this.notify(message, 'warn');
+    }
+
+    // --- KOMPATIBILITA (Alternatívne názvy, ktoré si mal v kóde) ---
+
+    showSuccess(message: string) {
+        this.success(message);
+    }
+
+    showError(message: string) {
+        this.error(message);
+    }
+
+    showWarning(message: string) {
+        this.warn(message);
+    }
+
+    // Niekedy sa používa showInfo, tak pre istotu:
+    showInfo(message: string) {
+        this.info(message);
+    }
+
+    // --- CONFIRM LOGIKA ---
 
     confirm(message: string): Promise<boolean> {
         return new Promise(resolve => {
             this.confirmSubject.next({ message, response: resolve });
         });
-    }
-
-    /** Helper metóda pre chyby (Používa sa v komponentoch pri chybách) */
-
-    showError(message: string) {
-
-        this.notify(message, 'error');
-
-    }
-
-
-
-    // Ostatné helper metódy a confirm logika zostávajú nezmenené... 
-
-    showSuccess(message: string) {
-
-        this.notify(message, 'success');
-
     }
 }

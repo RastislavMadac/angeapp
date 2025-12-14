@@ -1,3 +1,34 @@
+<div style="padding: 20px; background: #f0f0f0; display: flex; gap: 10px; flex-wrap: wrap; border-bottom: 1px solid #ccc;">
+  <strong style="width: 100%;">Test Notifikácií:</strong>
+  
+  <button (click)="testSuccess()" style="padding: 8px 16px; background: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer;">
+    Success
+  </button>
+
+  <button (click)="testInfo()" style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer;">
+    Info
+  </button>
+
+  <button (click)="testWarn()" style="padding: 8px 16px; background: #f59e0b; color: white; border: none; border-radius: 4px; cursor: pointer;">
+    Warning
+  </button>
+
+  <button (click)="testError()" style="padding: 8px 16px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer;">
+    Error
+  </button>
+
+  <button (click)="testConfirm()" style="padding: 8px 16px; background: #333; color: white; border: none; border-radius: 4px; cursor: pointer;">
+    Confirm Dialóg
+  </button>
+</div>
+
+<router-outlet></router-outlet>
+
+<app-notification-center></app-notification-center>
+
+
+
+
 <p>test works!</p>
 <label for="name">Name: </label>
 <input id="name" type="text" [formControl]="name">

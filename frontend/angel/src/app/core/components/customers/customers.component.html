@@ -6,75 +6,123 @@
 </app-navbar>
 
 <ng-template #detailTpl>
-  <form *ngIf="customerForm" [formGroup]="customerForm" (ngSubmit)="saveCustomer()" class="product-grid">
+  <form *ngIf="customerForm" [formGroup]="customerForm" (ngSubmit)="saveCustomer()" class="modern-form">
+    
+    <div class="card header-card">
+      <div class="header-row">
+        <div class="id-badge">
+          <label>ID Zákazníka</label>
+          <input formControlName="id" readonly>
+        </div>
+        
+        <div class="toggle-wrapper">
+          <label class="switch">
+            <input type="checkbox" formControlName="is_legal_entity">
+            <span class="slider round"></span>
+          </label>
+          <span class="toggle-label">Právnická osoba</span>
+        </div>
+      </div>
 
-    <label class="product1">ID:
-      <input formControlName="id" readonly>
-    </label>
+      <div class="main-input">
+        <label>Názov spoločnosti / Meno</label>
+        <input formControlName="name" placeholder="Zadajte názov...">
+      </div>
+    </div>
 
-    <label class="product2">Internet ID:
-      <input formControlName="internet_id">
-    </label>
+    <div class="cards-grid">
+      
+      <div class="card">
+        <h3><i class="icon-briefcase"></i> Firemné údaje</h3>
+        <div class="input-group">
+          <label>Internet ID</label>
+          <input formControlName="internet_id">
+        </div>
+        <div class="row-3">
+          <div class="input-group">
+            <label>IČO</label>
+            <input formControlName="ico">
+          </div>
+          <div class="input-group">
+            <label>DIČ</label>
+            <input formControlName="dic">
+          </div>
+          <div class="input-group">
+            <label>IČ DPH</label>
+            <input formControlName="ic_dph">
+          </div>
+        </div>
+      </div>
 
-    <label class="product3">Názov spoločnosti:
-      <input formControlName="name">
-    </label>
+      <div class="card">
+        <h3><i class="icon-phone"></i> Kontakt</h3>
+        <div class="row-3">
+          <div class="input-group">
+            <label>Email</label>
+            <input formControlName="email" type="email">
+          </div>
+          <div class="input-group">
+            <label>Telefón</label>
+            <input formControlName="phone">
+          </div>
+          <div class="input-group">
+            <label>Web</label>
+            <input formControlName="website">
+          </div>
+        </div>
+      </div>
 
-    <label class="product4">Adresa:
-      <textarea formControlName="address"></textarea>
-    </label>
+      <div class="card full-width">
+        <h3><i class="icon-map"></i> Adresy</h3>
+        <div class="address-grid">
+          
+          <div class="address-block">
+            <h4>Fakturačná adresa</h4>
+            <div class="input-group">
+              <label>Ulica a číslo</label>
+              <textarea formControlName="address" rows="3"></textarea>
+            </div>
+            <div class="row-2">
+              <div class="input-group city-grow">
+                <label>Mesto</label>
+                <input formControlName="city">
+              </div>
+              <div class="input-group">
+                <label>PSČ</label>
+                <input formControlName="postal_code">
+              </div>
+            </div>
+          </div>
 
-    <label class="product5">PSČ:
-      <input formControlName="postal_code">
-    </label>
+          <div class="address-block delivery-bg">
+            <h4>Doručovacia adresa</h4>
+            <div class="input-group">
+              <label>Ulica a číslo</label>
+              <textarea formControlName="delivery_address" rows="3"></textarea>
+            </div>
+            <div class="row-2">
+              <div class="input-group city-grow">
+                <label>Mesto</label>
+                <input formControlName="delivery_city">
+              </div>
+              <div class="input-group">
+                <label>PSČ</label>
+                <input formControlName="delivery_postal_code">
+              </div>
+            </div>
+          </div>
 
-    <label class="product6">Mesto:
-      <input formControlName="city">
-    </label>
+        </div>
+      </div>
 
-    <label class="product7">Doručovacia adresa:
-      <textarea formControlName="delivery_address"></textarea>
-    </label>
+    </div>
 
-    <label class="product8">Doručovacie mesto:
-      <input formControlName="delivery_city">
-    </label>
+    <div class="form-footer">
+      <button type="submit" [disabled]="!customerForm || customerForm.invalid" class="btn-primary">
+        {{ selectedCustomer ? 'Uložiť zmeny' : 'Vytvoriť zákazníka' }}
+      </button>
+    </div>
 
-    <label class="product9">Doručacie PSČ:
-      <input formControlName="delivery_postal_code">
-    </label>
-
-    <label class="product10">Právnická osoba:
-      <input type="checkbox" formControlName="is_legal_entity">
-    </label>
-
-    <label class="product11">IČO:
-      <input formControlName="ico">
-    </label>
-
-    <label class="product12">DIČ:
-      <input formControlName="dic">
-    </label>
-
-    <label class="product13">IČ DPH:
-      <input formControlName="ic_dph">
-    </label>
-
-    <label class="product14">Telefón:
-      <input formControlName="phone">
-    </label>
-
-    <label class="product15">Email:
-      <input formControlName="email">
-    </label>
-
-    <label class="product16">Web:
-      <input formControlName="website">
-    </label>
-
-    <button type="submit" [disabled]="!customerForm || customerForm.invalid">
-      {{ selectedCustomer ? 'Uložiť' : 'Vytvoriť' }}
-    </button>
   </form>
 </ng-template>
 
@@ -89,7 +137,7 @@
 <ng-template #masterTpl>
   <app-generic-table
     [columns]="columns"
-    [data]="customer"
+    [data]="(filteredData$ | async) ?? []" 
     [selectedItem]="selectedCustomer"
     (rowClick)="selectCustomer($event)">
   </app-generic-table>

@@ -1,0 +1,140 @@
+<app-navbar [selectedItem]="selectedItem"></app-navbar>
+<app-small-navbar></app-small-navbar>
+
+<div class="loading-overlay" *ngIf="isLoading">
+  <div class="spinner-container">
+    <mat-progress-spinner mode="indeterminate" color="primary" diameter="50"></mat-progress-spinner>
+    <p>Načítavam dáta...</p>
+  </div>
+</div>
+
+<div *ngIf="errorMessage" class="error-banner">
+  {{ errorMessage }}
+</div>
+
+<div class="content-container" *ngIf="!isLoading">
+  
+  <div class="toolbar">
+    <button mat-raised-button color="warn" (click)="onClose()">
+      <mat-icon>arrow_back</mat-icon> Späť na karty
+    </button>
+  </div>
+
+  <app-master-layout
+    [masterTemplateInput]="masterTpl"
+    [detailTemplateInput]="detailTpl"
+    [items]="objectItems"
+    [(selectedItem)]="selectedItem">
+  </app-master-layout>
+
+</div>
+
+<ng-template #masterTpl>
+  <app-generic-table
+    [columns]="columns"
+    [data]="(filteredData$ | async) ?? []"
+    [(selectedItem)]="selectedItem"
+    [defaultSortColumn]="'plan_number'"
+    (rowClick)="selectItems($event)" 
+    [rowClassMap]="getRowClass">
+  </app-generic-table>
+</ng-template>
+
+<ng-template #detailTpl let-item>
+  <div class="detail-container">
+    
+    <form [formGroup]="itemForm" *ngIf="itemForm; else noSelection" class="read-only-form">
+      
+      <div class="plan-header-card">
+        <h2>Detail Plánu</h2>
+        <div class="header-grid">
+          <div class="form-group">
+            <label>Číslo plánu</label>
+            <input formControlName="plan_number" readonly>
+          </div>
+
+          <div class="form-group">
+            <label>Platný od</label>
+            <input type="date" formControlName="start_date" readonly>
+          </div>
+
+          <div class="form-group">
+            <label>Platný do</label>
+            <input type="date" formControlName="end_date" readonly>
+          </div>
+        </div>
+      </div>
+
+      <hr class="divider"/>
+
+      <h3>Položky plánu ({{ itemsFormArray.controls.length }})</h3>
+      
+      <div formArrayName="items" class="items-grid">
+        
+        <div *ngFor="let itemGroup of itemsFormArray.controls; let i = index" 
+             [formGroupName]="i" 
+             class="product-card"
+             [ngClass]="getItemClass(itemGroup)">
+          
+          <div class="card-header">
+            <span class="product-name">{{ itemGroup.get('product_name')?.value || 'Produkt bez názvu' }}</span>
+            <span class="product-code">{{ itemGroup.get('product_id')?.value }}</span>
+          </div>
+
+          <div class="card-body">
+            
+            <div class="field-row">
+              <label>ID:</label>
+              <input formControlName="id" readonly class="small-input">
+            </div>
+
+            <div class="field-row">
+              <label>Kód:</label>
+              <input formControlName="product_id" readonly>
+            </div>
+            
+            <div class="field-row">
+              <label>Množstvo:</label>
+              <input type="number" formControlName="planned_quantity" readonly>
+            </div>
+            <div class="field-row">
+              <label>Prenesené (ks):</label>
+              <input type="number" formControlName="transfered_pcs" readonly>
+            </div>
+
+            <div class="field-row">
+              <label>Stav:</label>
+              <div class="status-badge" [ngClass]="getItemClass(itemGroup)">
+                {{ itemGroup.get('status')?.value }}
+              </div>
+            </div>
+
+            
+
+            
+            <button 
+            mat-mini-fab 
+            color="accent" 
+            (click)="selectPlanItemToCreateCard(itemGroup.getRawValue())" 
+            matTooltip="Vybrať túto položku a vytvoriť kartu"
+        >
+            <mat-icon>launch</mat-icon>
+        </button>
+          </div>
+        </div>
+
+        <div *ngIf="itemsFormArray.controls.length === 0" class="no-items-msg">
+          Tento plán neobsahuje žiadne produkty.
+        </div>
+
+      </div>
+    </form>
+
+    <ng-template #noSelection>
+      <div class="select-hint">
+        <p>Vyberte plán zo zoznamu pre zobrazenie detailov.</p>
+      </div>
+    </ng-template>
+
+  </div>
+</ng-template>

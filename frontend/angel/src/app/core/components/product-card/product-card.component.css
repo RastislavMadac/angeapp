@@ -1,0 +1,339 @@
+/* ========================================= */
+/* 1. HLAVNÉ ROZLOŽENIE A SPINNER */
+/* ========================================= */
+.spinner-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin: 40px 0;
+    z-index: 2000;
+}
+
+.spinner-wrapper p {
+    margin-top: 10px;
+    font-weight: bold;
+    color: #555;
+}
+
+
+
+/* ========================================= */
+/* 2. GRID A HLAVIČKA KARTY */
+/* ========================================= */
+.product-grid {
+    background-color: #f8f9fa;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.plan-header {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    /* Pôvodný gap 290px je veľmi veľký, zmenil som na bezpečnejších 20px, 
+       ale ak to tak potrebuješ kvôli dizajnu, vráť tam 290px */
+    gap: 20px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.plan-header label {
+    display: flex;
+    flex-direction: column;
+    font-size: 0.9em;
+    color: #495057;
+    font-weight: 600;
+}
+
+.plan-header input {
+    padding: 10px;
+    margin-top: 5px;
+    border: 1px solid #ced4da;
+    font-weight: 600;
+    border-radius: 4px;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.plan-header input:focus {
+    border-color: #80bdff;
+    outline: 0;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.plan-header input[readonly] {
+    background-color: #e9ecef;
+    cursor: default;
+}
+
+/* ========================================= */
+/* 3. POLIA PRODUKTU (INPUTY) */
+/* ========================================= */
+.product-fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.product-fields label {
+    display: flex;
+    flex-direction: column;
+    font-size: 0.9em;
+    color: #555;
+    font-weight: 500;
+}
+
+.product-fields input,
+.product-fields select {
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    margin-top: 5px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* ========================================= */
+/* 4. DROP-DOWN TLAČIDLO (OPRAVENÉ) */
+/* ========================================= */
+.btn-dropdown {
+    display: flex;
+    /* ZMENA: Flex pre zarovnanie textu a šípky */
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    background-color: #f8f9fa;
+    /* Defaultná šedá */
+    color: #333;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 10px 15px;
+    margin-top: 10px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.2s ease;
+}
+
+.btn-dropdown:hover {
+    background-color: #e2e6ea;
+}
+
+/* Špeciálny štýl pre VAROVANIA (Červený) */
+.btn-dropdown.warning {
+    background-color: #ffe6e6;
+    color: #d9534f;
+    border: 1px solid #d9534f;
+}
+
+.btn-dropdown.warning:hover {
+    background-color: #ffcccc;
+}
+
+/* ========================================= */
+/* 5. TABUĽKY (Order Checks & Ingredients) */
+/* ========================================= */
+.ingredients-table-wrapper {
+    margin-top: 10px;
+    overflow-x: auto;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    animation: fadeIn 0.3s ease-in-out;
+    /* Pridaná animácia */
+}
+
+.ingredients-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9em;
+    margin-top: 0;
+    /* Oprava marginu */
+}
+
+.ingredients-table th,
+.ingredients-table td {
+    padding: 8px;
+    text-align: left;
+    /* Zarovnanie vľavo je čitateľnejšie */
+    border-bottom: 1px solid #eee;
+    border-right: 1px solid #eee;
+}
+
+.ingredients-table th {
+    background-color: #f9f9f9;
+    font-weight: 600;
+}
+
+.sufficient {
+    color: #28a745;
+    font-weight: bold;
+}
+
+.insufficient {
+    color: #dc3545;
+    font-weight: bold;
+    background-color: #fff0f0;
+    /* Jemné podfarbenie chyby */
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-5px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ========================================= */
+/* 6. PRODUKTOVÉ POLOŽKY (KARTY) */
+/* ========================================= */
+.product-item {
+    background-color: #ffffff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 15px;
+    transition: all 0.2s ease-in-out;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    margin-bottom: 15px;
+}
+
+.product-item:hover {
+    border-color: #007bff;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.product-item.is-selected {
+    border: 2px solid #007bff;
+    /* Zmena na modrú pre výber, červená bola pre delete */
+    background-color: #eef6ff;
+}
+
+.product-item h3 {
+    font-size: 1.1em;
+    color: #333;
+    margin-top: 0;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 5px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* ========================================= */
+/* 7. AKČNÉ TLAČIDLÁ (ULOŽIŤ, ZRUŠIŤ...) */
+/* ========================================= */
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.btn-save,
+.btn-cancel,
+.btn-delete,
+.btn-primary,
+.btn-add {
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.btn-save {
+    background-color: #4caf50;
+    color: white;
+}
+
+.btn-save:hover {
+    background-color: #43a047;
+}
+
+.btn-save:disabled {
+    background-color: #a5d6a7;
+    cursor: not-allowed;
+}
+
+.btn-cancel {
+    background-color: #6b7280;
+    color: white;
+}
+
+.btn-cancel:hover {
+    background-color: #5a6268;
+}
+
+.btn-delete {
+    background-color: #e53935;
+    color: white;
+}
+
+.btn-delete:hover {
+    background-color: #d32f2f;
+}
+
+.btn-add {
+    background-color: #2563eb;
+    color: white;
+}
+
+.btn-add:hover {
+    background-color: #1d4ed8;
+}
+
+
+/* Input groups (ak sa používajú) */
+.product-input-group .input-with-button {
+    display: flex;
+    align-items: stretch;
+    margin-top: 5px;
+}
+
+.product-input-group .input-with-button input {
+    flex-grow: 1;
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+.product-input-group .lookup-button {
+    background-color: #6c757d;
+    color: white;
+    border: 1px solid #6c757d;
+    border-left: none;
+    border-top-right-radius: 4px;
+    border-bottom-right-radius: 4px;
+    padding: 0 10px;
+    cursor: pointer;
+}
+
+.transparent-input {
+    /* Odstránime pozadie a rámček inputu */
+    background-color: transparent !important;
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+
+    /* Dedenie farby textu z rodiča (z generic triedy) */
+    color: inherit !important;
+
+    /* Zachovanie čitateľnosti */
+    font-weight: 600;
+    width: 100%;
+    margin-top: 4px;
+    cursor: default;
+}

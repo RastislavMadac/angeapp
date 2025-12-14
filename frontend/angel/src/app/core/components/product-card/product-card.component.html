@@ -1,0 +1,115 @@
+<router-outlet></router-outlet>
+
+
+<app-navbar [selectedItem]="selectedItem"></app-navbar>
+
+<app-small-navbar></app-small-navbar>
+
+
+
+<ng-template #detailTpl>
+    <form [formGroup]="itemForm" *ngIf="itemForm" class="product-grid">
+        
+        <div class="card-status-header" *ngIf="!selectedItem?.id">
+            <h2 style="color: #2e7d32; margin: 0; padding: 10px 0;">
+                <mat-icon style="vertical-align: middle;">add_circle</mat-icon> 
+                Nová Výrobná Karta (Z Plánu)
+            </h2>
+        </div>
+
+        <div class="product-item" [ngClass]="getStatusClass()">
+
+            <div class="plan-header">
+                <label>Produkt:
+                    <input formControlName="product_name" readonly class="bold-text">
+                </label>
+
+                <label>Číslo karty:
+                    <input formControlName="card_number" class="bold-text" placeholder="Vygeneruje sa automaticky alebo zadajte...">
+                </label>
+
+                <input [formControl]="productionPlanNumberControl" readonly>
+            </div>
+
+            <hr />
+
+            <div class="products-section">
+                <div class="product-item production-summary">
+                    <h3>Výrobné údaje</h3>
+
+                    <div class="product-fields">
+                        <label>Plánované množstvo:
+                            <input type="number" formControlName="planned_quantity">
+                        </label>
+                        
+                        <label>Vyrobené (OK):
+                            <input type="number" formControlName="produced_quantity" class="highlight-input" readonly>
+                        </label>
+                        
+                        <label>Chybné (NOK):
+                            <input type="number" formControlName="defective_quantity" class="error-input">
+                        </label>
+                        
+                        <label>Status:
+                            <select formControlName="status">
+                                <option value="pending">Čaká</option>
+                                <option value="in_production">V procese</option>
+                                <option value="partially_completed">Čiastočne dokončené</option>
+                                <option value="completed">Dokončené</option>
+                                <option value="canceled">Zrušené</option>
+                            </select>
+                        </label>
+                    </div>
+
+                    <div class="notes-field" style="margin-top: 15px; padding: 0 10px;">
+                        <label>Poznámka k výrobe:</label>
+                        <textarea formControlName="notes" rows="2" style="width: 100%; margin-top: 5px;"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-actions" style="margin-top: 20px;">
+                <button type="button" class="btn-save" matTooltip="Uložiť kartu" 
+                        [disabled]="itemForm.invalid" (click)="saveItem()">
+                    💾 Uložiť {{ !selectedItem?.id ? 'Novú Kartu' : 'Zmeny' }}
+                </button>
+
+                <button type="button" class="btn-cancel" (click)="cancelEdit()" matTooltip="Zrušiť">
+                    ❌ Zrušiť
+                </button>
+
+                <button type="button" class="btn-add" 
+                        [routerLink]="['/production-card-plans']"
+                        routerLinkActive="active" matTooltip="Vybrať z plánu">
+                    ➕ Pridať položku
+                </button>
+
+                <button type="button" class="btn-delete" (click)="deleteSelectedItem()" 
+                        [disabled]="!selectedItem?.id" matTooltip="Vymazať celú kartu">
+                    🗑️ Vymazať kartu
+                </button>
+            </div>
+
+        </div>
+    </form>
+</ng-template>
+
+<div class="spinner-wrapper" *ngIf="isLoading">
+    <mat-progress-spinner mode="indeterminate" color="primary" diameter="50"></mat-progress-spinner>
+    <p>Načítavam dáta...</p>
+</div>
+
+<div *ngIf="errorMessage" class="error">{{ errorMessage }}</div>
+
+<app-master-layout [masterTemplateInput]="masterTpl" [detailTemplateInput]="detailTpl" [items]="objectItems"
+    [(selectedItem)]="selectedItem" (select)="selectItems($event)">
+</app-master-layout>
+
+<ng-template #masterTpl>
+    <ng-container *ngIf="objectItems.length">
+        <app-generic-table [columns]="columns"  [data]="(filteredData$ | async) ?? []"  [selectedItem]="selectedItem"
+            [defaultSortColumn]="'card_number'" (rowClick)="selectItems($event)" [rowClassMap]="rowClasses">
+        </app-generic-table>
+    </ng-container>
+
+</ng-template>

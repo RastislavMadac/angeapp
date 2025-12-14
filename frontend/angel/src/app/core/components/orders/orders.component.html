@@ -46,6 +46,7 @@
   [masterTemplateInput]="masterTpl"
   [detailTemplateInput]="detailTpl"
   [items]="orders"
+ 
   [(selectedItem)]="selectedOrder"
   (selectedItemChange)="onSelectedItemChange($event)"   
   (select)="selectOrder($event)">
@@ -56,6 +57,7 @@
 <!-- Order items modal -->
 <app-order-items
   *ngIf="showModal"
+  
   [order]="selectedOrder"
   [items]="selectedOrderItems"
   (close)="closeModal()"
@@ -67,7 +69,7 @@
 <ng-template #masterTpl> 
   <app-generic-table 
     [columns]="columns" 
-    [data]="orders" 
+    [data]="(filteredData$ | async) ?? []" 
     (rowClick)="selectOrder($event)" 
     [selectedItem]="selectedOrder" 
     [rowClassMap]="getRowClass">

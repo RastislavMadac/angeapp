@@ -1,79 +1,217 @@
-.toast-info {
-    background: #4caf50;
-    color: white;
-    padding: 0.5rem 1rem;
-    border-radius: 4px;
+/* =========================================
+   1. TOAST NOTIFIKÁCIE (Pravý horný roh)
+   ========================================= */
+
+.toast-notification {
     position: fixed;
-    top: 1.2rem;
-    right: 24rem;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    top: 24px;
+    right: 24px;
+    z-index: 9999;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+
+    min-width: 320px;
+    max-width: 450px;
+    padding: 16px 20px;
+
+    /* Moderný Glass efekt */
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+
+    /* Jemný tieň a zaoblenie */
+    box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.15);
+    border-radius: 12px;
+    border-left: 6px solid transparent;
+
+    /* Typografia */
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 0.95rem;
+    color: #1f2937;
+    font-weight: 500;
+
+    /* Animácia príchodu */
+    animation: slideInRight 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-.toast-warn {
-    background: #ffc107;
-    color: black;
-    padding: 0.5rem 1rem;
-    border-radius: 4px;
-    position: fixed;
-    top: 1.2rem;
-    right: 24rem;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-}
-
+/* Farebné varianty (prúžok vľavo) */
 .toast-success {
-    background: #0ae05c;
-    color: black;
-    padding: 0.5rem 1rem;
-    border-radius: 4px;
-    position: fixed;
-    top: 1.2rem;
-    right: 24rem;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    border-left-color: #10b981;
 }
+
+/* Zelená */
+.toast-info {
+    border-left-color: #3b82f6;
+}
+
+/* Modrá */
+.toast-warn {
+    border-left-color: #f59e0b;
+}
+
+/* Oranžová */
+.toast-error {
+    border-left-color: #ef4444;
+}
+
+/* Červená */
+
+/* Ikonka/Text správy */
+.message {
+    flex-grow: 1;
+}
+
+/* Tlačidlo X na toaste */
+.close-toast {
+    background: transparent;
+    border: none;
+    color: #9ca3af;
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.close-toast:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+    color: #374151;
+}
+
+
+/* =========================================
+     2. CONFIRM DIALÓG (Stred obrazovky)
+     ========================================= */
 
 .notification-confirm {
     position: fixed;
-    top: 30%;
+    top: 50%;
     left: 50%;
-    transform: translateX(-50%);
-    background: #fff;
-    border: 2px solid #0a9cd6;
-    padding: 1.5rem 2rem;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-    border-radius: 8px;
-    font-family: Arial, sans-serif;
-    font-size: 1rem;
-    color: #333;
-    z-index: 1000;
-    opacity: 0;
-    animation: fadeIn 0.3s forwards;
+    transform: translate(-50%, -50%);
+    z-index: 10000;
+
+    width: 90%;
+    max-width: 400px;
+    padding: 32px 24px 24px;
+    /* Viac miesta hore kvôli X */
+
+    background: #ffffff;
+    border-radius: 16px;
     text-align: center;
-    /* centrovanie textu */
-    line-height: 1.5;
-    /* pohodlnejšie čítanie textu */
+
+    /* TRIK: Toto vytvorí tmavé pozadie okolo okna bez ďalšieho HTML elementu */
+    box-shadow:
+        0 20px 25px -5px rgba(0, 0, 0, 0.1),
+        0 8px 10px -6px rgba(0, 0, 0, 0.1),
+        0 0 0 100vw rgba(0, 0, 0, 0.4);
+
+    animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* Animácia pre jemný fade-in */
-@keyframes fadeIn {
+.notification-confirm p {
+    margin: 0 0 24px 0;
+    font-family: 'Inter', sans-serif;
+    font-size: 1.1rem;
+    color: #374151;
+    line-height: 1.5;
+}
+
+/* Kontajner pre tlačidlá */
+.actions {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+}
+
+/* Spoločné štýly pre tlačidlá */
+.actions button {
+    padding: 10px 24px;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: transform 0.1s ease, filter 0.2s;
+}
+
+.actions button:active {
+    transform: scale(0.96);
+}
+
+/* ÁNO - Primárne tlačidlo */
+.btn-primary {
+    background-color: #3b82f6;
+    /* Moderná modrá */
+    color: white;
+    box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.4);
+}
+
+.btn-primary:hover {
+    background-color: #2563eb;
+}
+
+/* NIE - Sekundárne tlačidlo */
+.btn-secondary {
+    background-color: #f3f4f6;
+    color: #4b5563;
+}
+
+.btn-secondary:hover {
+    background-color: #e5e7eb;
+}
+
+/* Tlačidlo X v rohu Confirm okna */
+.close-btn {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: transparent;
+    border: none;
+    font-size: 1rem;
+    color: #9ca3af;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: color 0.2s;
+}
+
+.close-btn:hover {
+    color: #ef4444;
+    /* Červená pri hoveri */
+    background-color: #fef2f2;
+}
+
+/* =========================================
+     ANIMÁCIE
+     ========================================= */
+
+@keyframes slideInRight {
+    from {
+        opacity: 0;
+        transform: translateX(100%);
+    }
+
     to {
         opacity: 1;
+        transform: translateX(0);
     }
 }
 
-/* Tlačidlá */
-.notification-confirm button {
-    margin: 0.5rem 0.25rem 0 0.25rem;
-    /* horný margin 0.5rem, medzi tlačidlami 0.5rem celkovo */
-    padding: 0.5rem 1rem;
-    border: none;
-    background-color: #007bff;
-    color: white;
+@keyframes popIn {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -40%) scale(0.9);
+    }
 
-    border-radius: 4px;
-    cursor: pointer;
-    transition: background-color 0.2s;
-}
-
-.notification-confirm button:hover {
-    background-color: #0056b3;
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
 }

@@ -191,3 +191,36 @@ tr.selected {
     border-radius: 4px;
 
 }
+
+.tooltip-header,
+.tooltip-cell {
+    cursor: help;
+    white-space: nowrap;
+    overflow: visible;
+    text-overflow: ellipsis;
+}
+
+.row-pending {
+    background-color: #fff3e0;
+    color: #3498db;
+}
+
+.row-processing {
+    background-color: #e0f7fa;
+    color: #f1c40f;
+}
+
+.row-partially_completed {
+    background-color: #e0f7fa;
+    color: #e67e22;
+}
+
+.row-completed {
+    background-color: #e8f5e9;
+    color: #2ecc71;
+}
+
+.row-canceled {
+    background-color: #ffebee;
+    color: #e74c3c;
+}

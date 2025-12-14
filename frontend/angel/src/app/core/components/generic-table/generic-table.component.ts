@@ -1,4 +1,4 @@
-import { Component, Input, OnInit, OnDestroy, Output, EventEmitter, SimpleChanges, OnChanges } from '@angular/core';
+import { Component, ChangeDetectionStrategy, Input, OnInit, OnDestroy, Output, EventEmitter, SimpleChanges, OnChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TableColumn } from '../../interface/tablecolumnn.interface';
 import { Subscription } from 'rxjs';
@@ -6,28 +6,37 @@ import { FormsModule } from '@angular/forms';
 import { FilterService } from '../../servicies/filter.service';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
+import { TemplateRef } from '@angular/core';
 
 @Component({
   selector: 'app-generic-table',
   standalone: true,
   imports: [CommonModule, FormsModule, MatIconModule, MatButtonModule],
   templateUrl: './generic-table.component.html',
-  styleUrls: ['./generic-table.component.css']
+  styleUrls: ['./generic-table.component.css'],
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class GenericTableComponent<T extends object> implements OnInit, OnChanges, OnDestroy {
 
   // ---------- Zobrazenie dát ----------
+  // šablóna detailu pre collapsible
+  @Input() detailTemplate: TemplateRef<any> | null = null;
+
+  // stav rozbalenia pre jednotlivé riadky
+  showCollapse: { [key: string]: boolean } = {};
   @Input() data: T[] = [];
   @Input() columns: TableColumn[] = [];
   @Output() rowClick = new EventEmitter<T>();
+  @Output() selectedItemChange = new EventEmitter<T>();
+
   @Input() selectedItem: T | null = null;
 
   filteredData: T[] = [];
   headers: TableColumn[] = [];
   //Zviraznenie
-  @Input() cellClassMap: { [key: string]: (value: any) => string } = {};
+  @Input() cellClassMap: { [key: string]: (value: any, row: any) => string } = {};
 
-  @Input() rowClassMap: (row: any) => string = () => ''; // Ponechajte default hodnotu
+  @Input() rowClassMap: (row: any) => string = () => '';
 
   @Input() defaultSortColumn: string | null = null; // nový input
 
@@ -35,22 +44,48 @@ export class GenericTableComponent<T extends object> implements OnInit, OnChange
   sortColumn: string | null = null;
   sortAsc: boolean = true;
 
-
+  toggleCollapse(row: T) {
+    const key = this.rowKey(row);
+    this.showCollapse[key] = !this.showCollapse[key];
+  }
+  rowKey(row: T): string {
+    // ak má objekt id, použijeme ho, inak JSON string
+    return (row as any).id ?? JSON.stringify(row);
+  }
 
   sortData(columnKey: string) {
     if (this.sortColumn === columnKey) {
-      // prepni smer
+      // prepni smer (asc/desc)
       this.sortAsc = !this.sortAsc;
     } else {
       this.sortColumn = columnKey;
-      this.sortAsc = true;
+      this.sortAsc = false; // čísla default od najväčšieho
     }
 
-    // zoradenie kópiou dát
     this.filteredData = [...this.filteredData].sort((a, b) => {
-      const valA = this.getValue(a, columnKey)?.toString().toLowerCase() ?? '';
-      const valB = this.getValue(b, columnKey)?.toString().toLowerCase() ?? '';
-      return this.sortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+      let valA = this.getValue(a, columnKey);
+      let valB = this.getValue(b, columnKey);
+
+      // --- číselné triedenie ---
+      const numA = Number(valA);
+      const numB = Number(valB);
+      if (!isNaN(numA) && !isNaN(numB)) {
+        return this.sortAsc ? numA - numB : numB - numA;
+      }
+
+      // --- dátumové triedenie ---
+      const dateA = new Date(valA);
+      const dateB = new Date(valB);
+      if (!isNaN(dateA.getTime()) && !isNaN(dateB.getTime())) {
+        return this.sortAsc
+          ? dateA.getTime() - dateB.getTime()
+          : dateB.getTime() - dateA.getTime();
+      }
+
+      // --- textové triedenie ---
+      const strA = valA?.toString().toLowerCase() ?? '';
+      const strB = valB?.toString().toLowerCase() ?? '';
+      return this.sortAsc ? strA.localeCompare(strB) : strB.localeCompare(strA);
     });
   }
 
@@ -114,7 +149,11 @@ export class GenericTableComponent<T extends object> implements OnInit, OnChange
   }
 
   onRowClick(row: T) {
+    this.selectedItem = row;
     this.rowClick.emit(row);
+    if (this.isSelected(row)) {
+      this.toggleCollapse(row);
+    }
   }
 
   getValue(item: any, key: string) {
@@ -149,5 +188,8 @@ export class GenericTableComponent<T extends object> implements OnInit, OnChange
     );
 
   }
+
+
+
 
 }

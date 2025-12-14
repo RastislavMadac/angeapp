@@ -68,7 +68,8 @@ export interface ProductPlanProductsInterface {
 
 
 export type ProductPlanItemForm = ProductPlanProductsInterface & {
-    product_id: string | null; // ⬅️ Kód produktu (LEN pre UI a vyhľadávanie)
+    product_id: string | null;
+    production_plan_number?: string;
 };
 
 export interface ProductFromModal {
@@ -82,5 +83,10 @@ export interface ProductFromModal {
 export interface ProductPlanProductsFrontend extends Partial<ProductPlanProductsInterface> {
     isNew?: boolean; // true pre nové položky
     dirty?: boolean; // true ak bola položka upravená
+}
+
+export interface PlanItemForCard extends ProductPlanProductsInterface {
+    product_id: string;
+    production_plan_number?: string; // tu uložíme plan_number z nadradeného plánu
 }
 

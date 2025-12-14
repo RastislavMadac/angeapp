@@ -15,6 +15,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { NavbarComponent } from '../navbar/navbar.component';
+import { combineLatest, map, BehaviorSubject, Observable } from 'rxjs';
 
 @Component({
   selector: 'app-users',
@@ -29,7 +30,9 @@ export class UsersComponent implements OnInit {
   users: User[] = [];
   selectedUser: User | null = null;   // klasická property
   userForm: FormGroup | null = null;  // klasická property
+  filteredData$: Observable<User[]>;
 
+  private filterSubject = new BehaviorSubject<User[]>([]); // reaktívny zdroj pre users
 
 
   columns: TableColumn[] = [
@@ -49,7 +52,26 @@ export class UsersComponent implements OnInit {
     private fb: FormBuilder,
     private notify: NotificationService,
     private filterService: FilterService,
-    private cdr: ChangeDetectorRef) { }
+    private cdr: ChangeDetectorRef) {
+
+    // Observable pre filtrovaných používateľov
+    this.filteredData$ = combineLatest([
+      this.filterSubject.asObservable(),
+      this.filterService.filters$
+    ]).pipe(
+      map(([users, filters]) => {
+        if (!filters.length) return users;
+        return users.filter(user =>
+          filters.every(f =>
+            Object.values(user).some(v =>
+              v != null && v.toString().toLowerCase().includes(f)
+            )
+          )
+        );
+      })
+    );
+  }
+
 
   ngOnInit(): void {
     this.loadUsers();
@@ -70,6 +92,7 @@ export class UsersComponent implements OnInit {
       next: users => {
         this.users = users.map(u => ({ ...u, is_active: Boolean(u.is_active) }));
         this.isLoading = false;
+        this.filterSubject.next(this.users);
       },
       error: err => {
         this.errorMessage = 'Nepodarilo sa načítať používateľov';

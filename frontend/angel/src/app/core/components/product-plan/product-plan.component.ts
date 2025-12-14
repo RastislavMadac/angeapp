@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit, ViewEncapsulation } from '@angular/core';
 import { FormArray, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { CommonModule, formatDate } from '@angular/common';
 import { ReactiveFormsModule } from '@angular/forms';
@@ -7,7 +7,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { Observable, Subscription, debounceTime, distinctUntilChanged, filter, forkJoin, of, switchMap } from 'rxjs';
+import { Observable, Subscription, debounceTime, distinctUntilChanged, filter, forkJoin, of, switchMap, combineLatest, map, BehaviorSubject } from 'rxjs';
 
 // Interfaces
 import { ProductFromModal, ProductPlanInterface, ProductPlanItemForm, ProductPlanItemsInterface, ProductPlanProductsInterface } from '../../interface/productPlan.interface';
@@ -17,15 +17,18 @@ import { TableColumn } from '../../interface/tablecolumnn.interface';
 import { ProductPlanService } from '../../servicies/productPlan.service';
 import { UserService } from '../../servicies/user.service';
 import { NotificationService } from '../../servicies/notification.service';
-
+import { FilterService } from '../../servicies/filter.service';
 // Components
 import { GenericTableComponent } from '../generic-table/generic-table.component';
 import { MasterLayoutComponent } from '../master-layout/master-layout.component';
 import { NavbarComponent } from '../navbar/navbar.component';
 import { SmallNavbarComponent } from '../small-navbar/small-navbar.component';
-import { ProductPlanProductComponent } from '../product-plan-products/product-plan-products';
+
 import { environment } from '../../../../enviroment/enviroment';
 import { codeValidator, integerValidatorWithNotify } from '../validators/form.validators';
+import { StatusService } from '../../servicies/status.service';
+
+
 
 @Component({
   selector: 'app-product-plan',
@@ -43,9 +46,11 @@ import { codeValidator, integerValidatorWithNotify } from '../validators/form.va
     NavbarComponent,
     SmallNavbarComponent,
     GenericTableComponent,
-    ProductPlanProductComponent,
+
+
     MatProgressSpinnerModule
   ],
+  encapsulation: ViewEncapsulation.None
 })
 export class ProductPlanComponent implements OnInit, OnDestroy {
   showModal = false;
@@ -61,7 +66,9 @@ export class ProductPlanComponent implements OnInit, OnDestroy {
   private nextAvailableTempId: number = 0;
   private maxServerIdOnLoad: number = 0;
   private maxServerIdOnLoadProduct: number = 0;
+  filteredData$: Observable<ProductPlanInterface[]>;
 
+  private filterSubject = new BehaviorSubject<ProductPlanInterface[]>([]);
 
 
 
@@ -82,8 +89,26 @@ export class ProductPlanComponent implements OnInit, OnDestroy {
     private productPlanService: ProductPlanService,
     private userService: UserService,
     private notify: NotificationService,
-    private fb: FormBuilder
-  ) { }
+    private fb: FormBuilder,
+    private filterService: FilterService,
+    private statusService: StatusService,
+  ) {
+    this.filteredData$ = combineLatest([
+      this.filterSubject.asObservable(),
+      this.filterService.filters$
+    ]).pipe(
+      map(([objectItems, filters]) => {
+        if (!filters.length) return objectItems;
+        return objectItems.filter(objectItems =>
+          filters.every(f =>
+            Object.values(objectItems).some(v =>
+              v != null && this.filterService.normalizeFilter(v).includes(f)
+            )
+          )
+        );
+      })
+    );
+  }
 
   ngOnInit(): void {
     this.loadAllItems();
@@ -155,6 +180,7 @@ export class ProductPlanComponent implements OnInit, OnDestroy {
     this.productPlanService.loadAllProductPlans().subscribe({
       next: (items) => {
         this.objectItems = items.map((c) => ({ ...c }));
+        this.filterSubject.next(this.objectItems);
         //STUB - 1. Data z loadAllItems:", this.objectItems
         if (!environment.production && environment.debug) {
           console.log("1. Data z loadAllItems:", this.objectItems);
@@ -695,7 +721,9 @@ export class ProductPlanComponent implements OnInit, OnDestroy {
             if (Array.isArray(fieldErrors) && fieldErrors.length > 0) {
               // Formátujeme správu pre používateľa
               errorMessage = `Chyba v poli '${fieldName}': ${fieldErrors[0]}`;
+
             }
+
           }
 
           console.error('❌ DETAILED DRF PATCH ERROR:', errorBody);
@@ -706,9 +734,11 @@ export class ProductPlanComponent implements OnInit, OnDestroy {
           console.error('❌ PATCH Chyba pri ukladaní:', err);
         }
 
+
         // 📢 KĽÚČOVÉ: Zobrazíme extrahovanú chybovú správu
         this.notify.showError(errorMessage);
       }
+
     });
   }
 
@@ -1116,74 +1146,42 @@ export class ProductPlanComponent implements OnInit, OnDestroy {
 
     return { newItemsToProcess, hasInvalidNewItems };
   }
+  rowClasses = (row: ProductPlanInterface) => {
+    const items = row.items || [];
 
-  getItemClass(itemGroup: any): string {
-    // Získame hodnotu stavu priamo z formulárovej skupiny (FormControl)
+    // Ak plán nemá položky, nemá farbu
+    if (items.length === 0) return '';
+
+    // Skontrolujeme statusy položiek vnútri plánu
+    const hasCanceled = items.some((i: any) => i.status === 'canceled');
+    const hasInProduction = items.some((i: any) => i.status === 'in_production');
+    const hasPartially = items.some((i: any) => i.status === 'partially_completed'); // pozor na underscore vs medzera
+    const isAllCompleted = items.length > 0 && items.every((i: any) => i.status === 'completed');
+
+    // Priority farieb (rovnaké triedy ako v ProductCard)
+    if (hasCanceled) return 'row-canceled';          // Červená
+    if (isAllCompleted) return 'row-completed';       // Zelená
+    if (hasInProduction) return 'row-processing';     // Oranžová/Modrá
+    if (hasPartially) return 'row-partially_completed'; // Žltá
+
+    // Default (ak sú len 'pending')
+    return 'row-pending';
+  };
+
+  /** * 2. Farba pre DETAIL POLOŽKY (FormArray riadok)
+   * Musíme zistiť status pre KONKRÉTNY index, nie pre celý formulár.
+   */
+  getItemStatusClass(index: number): string {
+    // Vytiahneme konkrétny FormGroup z poľa
+    const itemGroup = this.itemsFormArray.at(index);
+    if (!itemGroup) return '';
+
+    // Získame hodnotu statusu
     const status = itemGroup.get('status')?.value;
 
-    switch (status) {
-      case 'pending':
-        return 'item-badge-pending';
-      case 'in_production':
-        return 'item-badge-processing'; // Použijeme existujúce farby
-      case 'partially completed':
-        return 'item-badge-partially';
-      case 'completed':
-        return 'item-badge-completed';
-      case 'canceled':
-        return 'item-badge-canceled';
-      default:
-        return '';
-    }
+    // Vrátime CSS triedu (využijeme existujúci service alebo hardcode)
+    return this.statusService.getCssClass(status);
   }
 
 
-  getRowClass(row: any): string {
-    const items = row.items;
-
-    // 1. Ošetrenie prázdneho poľa
-    if (!items || items.length === 0) {
-      return 'badge-no-items'; // Nová trieda pre prázdny plán
-    }
-
-    // 2. Kontrola prítomnosti stavov
-    // Používame some() na kontrolu, či je aspoň jeden takýto stav
-    const hasCanceled = items.some((item: any) => item.status === 'canceled');
-    const hasPending = items.some((item: any) => item.status === 'pending');
-    const hasInProduction = items.some((item: any) => item.status === 'in_production');
-    const hasPartiallyCompleted = items.some((item: any) => item.status === 'partially completed');
-
-    // 3. Kontrola dokončenia (všetky musia byť completed)
-    const allCompleted = items.every((item: any) => item.status === 'completed');
-
-    // 4. Aplikácia logiky (podľa klesajúcej priority)
-
-    // A. Ak je čokoľvek ZRUŠENÉ, celý plán má stav "Zrušený"
-    if (hasCanceled) {
-      return 'badge-canceled';
-    }
-
-    // B. Ak je čokoľvek VO VÝROBE (a nič nie je zrušené)
-    if (hasInProduction) {
-      return 'badge-processing'; // Používame pre in_production
-    }
-
-    // C. Ak čokoľvek ČAKÁ (a nič nie je zrušené/vo výrobe)
-    if (hasPending) {
-      return 'badge-pending';
-    }
-
-    // D. Ak je čokoľvek ČIASTOČNE PRENESENÉ
-    if (hasPartiallyCompleted) {
-      return 'badge-partially-completed';
-    }
-
-    // E. Ak sú VŠETKY položky Dokončené
-    if (allCompleted) {
-      return 'badge-completed';
-    }
-
-    // F. Ak sa sem dostaneme, je to neočakávaný/zmiešaný stav, napr. prázdny status
-    return 'badge-mixed-status';
-  }
 }

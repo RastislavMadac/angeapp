@@ -17,7 +17,8 @@ import { OrderService } from '../../servicies/order.service';
 import { UserService } from '../../servicies/user.service';
 import { NotificationService } from '../../servicies/notification.service';
 import { ButtonsService } from '../../servicies/buttons.service';
-
+import { combineLatest, map, BehaviorSubject, Observable } from 'rxjs';
+import { FilterService } from '../../servicies/filter.service';
 @Component({
   selector: 'app-orders',
   templateUrl: './orders.component.html',
@@ -40,6 +41,9 @@ import { ButtonsService } from '../../servicies/buttons.service';
 export class OrdersComponent implements OnInit {
   isLoading = true;
   errorMessage = '';
+  filteredData$: Observable<OrderInterface[]>;
+
+  private filterSubject = new BehaviorSubject<OrderInterface[]>([]);
 
   // ---- debug-enabled properties (wrappers so môžeme logovať nastavenia) ----
   private _orders: OrderInterface[] = [];
@@ -111,8 +115,25 @@ export class OrdersComponent implements OnInit {
     private orderService: OrderService,
     private userService: UserService,
     private notify: NotificationService,
-    private buttonService: ButtonsService
-  ) { }
+    private buttonService: ButtonsService,
+    private filterService: FilterService,
+  ) {
+    this.filteredData$ = combineLatest([
+      this.filterSubject.asObservable(),
+      this.filterService.filters$
+    ]).pipe(
+      map(([orders, filters]) => {
+        if (!filters.length) return orders;
+        return orders.filter(orders =>
+          filters.every(f =>
+            Object.values(orders).some(v =>
+              v != null && this.filterService.normalizeFilter(v).includes(f)
+            )
+          )
+        );
+      })
+    );
+  }
 
   ngOnInit(): void {
     console.log('%c[DEBUG] OrdersComponent ngOnInit', 'color: teal');
@@ -144,7 +165,7 @@ export class OrdersComponent implements OnInit {
           console.log('%c[DEBUG] Default selectedOrder assigned to orders[0] id=', 'color: orange', this.selectedOrder?.id);
           this.initForm(this.selectedOrder);
         }
-
+        this.filterSubject.next(this.orders);
         this.isLoading = false;
       },
 

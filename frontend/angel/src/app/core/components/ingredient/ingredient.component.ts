@@ -13,7 +13,8 @@ import { Product } from '../../interface/product.interface';
 import { ProductIngredient } from '../../interface/productIngredient';
 import { ItemSelectorComponent } from '../item-selector/item-selector.component';
 import { AddIngredientEvent } from '../../interface/newIngrredientEvent.interface';
-
+import { combineLatest, map, BehaviorSubject, Observable } from 'rxjs';
+import { FilterService } from '../../servicies/filter.service';
 @Component({
   selector: 'app-product-ingredient',
   standalone: true,
@@ -40,8 +41,9 @@ export class ProductIngredientComponent implements OnInit {
 
   ingredientForm: FormGroup;
 
-  filterText: string = '';
 
+  filteredData$: Observable<Product[]>;
+  private filterSubject = new BehaviorSubject<Product[]>([])
 
 
   columns: TableColumn[] = [
@@ -57,12 +59,29 @@ export class ProductIngredientComponent implements OnInit {
     private productService: ProductService,
     private userService: UserService,
     private notify: NotificationService,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private filterService: FilterService,
   ) {
     this.ingredientForm = this.fb.group({
       ingredient_id: [null, Validators.required],
       quantity: [1, [Validators.required, Validators.min(0.01)]]
     });
+
+    this.filteredData$ = combineLatest([
+      this.filterSubject.asObservable(),
+      this.filterService.filters$
+    ]).pipe(
+      map(([product, filters]) => {
+        if (!filters.length) return product;
+        return product.filter(product =>
+          filters.every(f =>
+            Object.values(product).some(v =>
+              v != null && this.filterService.normalizeFilter(v).includes(f)
+            )
+          )
+        );
+      })
+    );
   }
 
   ngOnInit(): void {
@@ -83,10 +102,9 @@ export class ProductIngredientComponent implements OnInit {
       next: products => {
         this.product = products.map(p => ({ ...p, is_serialized: Boolean(p.is_serialized) }));
         this.isLoading = false;
-
+        this.filterSubject.next(this.product);
         if (this.product.length > 0) {
           this.handleRowClick(this.product[0]);
-
         }
       },
       error: err => {

@@ -4,11 +4,7 @@
 <!-- Small navigation menu -->
 <app-small-navbar ></app-small-navbar>
 
-<app-product-plan-product
-*ngIf="showModal"
-(closeDoor)="closeModal()"
-(productSelected)="onProductSelected($event)"
-></app-product-plan-product>
+
 
 <!-- 🔹 DETAIL TEMPLATE -->
 <ng-template #detailTpl>
@@ -16,7 +12,7 @@
       >
 
     <!-- 🔸 Sekcia: základné info o pláne -->
-    <div class="plan-header">
+    <div class="plan-header" >
       <label>Číslo plánu:
         <input formControlName="plan_number">
       </label>
@@ -39,7 +35,7 @@
       class="product-item"
       (click)="selectItemForDelete(i)" 
       [class.is-selected]="selectedItemIndex === i"
-      [ngClass]="getItemClass(itemGroup)">
+      [ngClass]="getItemStatusClass(i)">
 
         <!-- Produkt info -->
         <h3>
@@ -83,11 +79,27 @@
           </label>
           <label>Status:
             <select formControlName="status">
-              <option value="pending">Čaká sa</option>
-              <option value="in_production">Vo výrobe</option>
-              <option value="partially completed">Čiastočne prenesená</option>
-              <option value="completed">Dokončené</option>
-              <option value="canceled">Zrušené</option>
+              
+              <option value="pending" *ngIf="itemGroup.get('status')?.value === 'pending'">
+                Čaká sa
+              </option>
+      
+              <option value="in_production" *ngIf="itemGroup.get('status')?.value === 'in_production'">
+                Vo výrobe
+              </option>
+      
+              <option value="partially completed" *ngIf="itemGroup.get('status')?.value === 'partially completed'">
+                Čiastočne prenesená
+              </option>
+      
+              <option value="completed" *ngIf="itemGroup.get('status')?.value === 'completed'">
+                Dokončené
+              </option>
+      
+              <option value="canceled">
+                Zrušené
+              </option>
+      
             </select>
           </label>
           <label>Prenesené množstvo:
@@ -197,15 +209,17 @@
 
 <!-- 🔹 MASTER TEMPLATE -->
 <ng-template #masterTpl>
+  <ng-container *ngIf="objectItems.length">
   <app-generic-table
     [columns]="columns"
     [data]="objectItems"
     [selectedItem]="selectedItem"
     (rowClick)="selectItems($event)"
-    [rowClassMap]="getRowClass.bind(this)"
+    [rowClassMap]="rowClasses"
     [defaultSortColumn]="'plan_number'"
    >
   </app-generic-table>
+</ng-container>
 </ng-template>
 
 

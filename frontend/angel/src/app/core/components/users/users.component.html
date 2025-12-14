@@ -42,7 +42,7 @@
 <ng-template #masterTpl> 
   <app-generic-table 
   [columns]="columns" 
-  [data]="users" 
+  [data]="(filteredData$ | async) ?? []"
   [selectedItem]="selectedUser" 
   (rowClick)="selectUser($event)" >
 </app-generic-table> 

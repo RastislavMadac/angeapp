@@ -22,6 +22,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { ProductService } from '../../servicies/product.service';
 import { forkJoin, tap } from 'rxjs';
 import { NavbarComponent } from '../navbar/navbar.component';
+import { combineLatest, map, BehaviorSubject, Observable } from 'rxjs';
 
 @Component({
   selector: 'app-product',
@@ -42,14 +43,34 @@ export class ProductComponent implements OnInit {
 
   selectedProduct: Product | null = null;
   productForm: FormGroup | null = null;
-
+  filteredData$: Observable<Product[]>;
+  private filterSubject = new BehaviorSubject<Product[]>([]); // reaktívny zdroj pre users 
   constructor(
     private productService: ProductService,
     private userService: UserService,
     private fb: FormBuilder,
     private notify: NotificationService,
     private filterService: FilterService,
-    private cdr: ChangeDetectorRef) { }
+    private cdr: ChangeDetectorRef
+  ) {
+    this.filteredData$ = combineLatest([
+      this.filterSubject.asObservable(),
+      this.filterService.filters$
+    ]).pipe(
+      map(([product, filters]) => {
+        if (!filters.length) return product;
+
+        return product.filter(product =>
+          filters.every(f =>
+            Object.values(product).some(v =>
+              v != null && this.filterService.normalizeFilter(v).includes(f)
+            )
+          )
+        );
+      })
+    );
+  }
+
 
   ngOnInit(): void {
     this.loadLookups().subscribe({
@@ -135,7 +156,9 @@ export class ProductComponent implements OnInit {
     this.productService.loadAllProduct().subscribe({
       next: product => {
         this.product = product.map(p => ({ ...p, is_serialized: Boolean(p.is_serialized) }));
+
         this.isLoading = false;
+        this.filterSubject.next(this.product);
       },
       error: err => {
         this.errorMessage = 'Nepodarilo sa načítať produkty';

@@ -1,15 +1,54 @@
 import { Component, inject, OnInit } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators, FormBuilder, FormArray, } from '@angular/forms';
 import { CommonModule } from '@angular/common';
+import { NotificationService } from '../../servicies/notification.service';
+import { RouterModule } from '@angular/router';
+import { NotificationCenterComponent } from '../notification-center/notification-center.component';
 
 @Component({
   selector: 'app-test',
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, ReactiveFormsModule, RouterModule, NotificationCenterComponent              // 
+  ],
   standalone: true,
   templateUrl: './test.component.html',
   styleUrl: './test.component.css'
 })
 export class TestComponent implements OnInit {
+
+  constructor(private notifyService: NotificationService) { }
+
+  // --- TESTOVACIE METÓDY ---
+  testSuccess() {
+    this.notifyService.success('Údaje boli úspešne uložené! ✅');
+  }
+
+  testInfo() {
+    this.notifyService.info('Nová verzia aplikácie je dostupná.');
+  }
+
+  testWarn() {
+    this.notifyService.warn('Pozor, blíži sa koniec platnosti relácie.');
+  }
+
+  testError() {
+    this.notifyService.error('Chyba pri pripájaní k serveru (500).');
+  }
+
+  testConfirm() {
+    this.notifyService.confirm('Naozaj chceš vymazať tento záznam? Táto akcia je nevratná.')
+      .then(result => {
+        if (result) {
+          this.notifyService.success('Záznam vymazaný.');
+        } else {
+          this.notifyService.info('Akcia zrušená.');
+        }
+      });
+  }
+
+
+
+
+
   name = new FormControl('');
 
   updateName() { this.name.setValue('Nancy'); }

@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Router } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
-import { Observable, tap } from 'rxjs';
+import { Observable, BehaviorSubject } from 'rxjs';
 import { environment } from '../../../enviroment/enviroment';
 import { ProductPlanInterface } from '../interface/productPlan.interface';
 import { ProductPlanItemsInterface } from '../interface/productPlan.interface';
@@ -21,6 +21,10 @@ export class ProductPlanService {
     loadAllProductPlans(): Observable<ProductPlanInterface[]> {
         return this.http.get<ProductPlanInterface[]>(`${this.apiUrl}production-plans/`);
     }
+    // 🔹 Plányfiltrované
+    loadAllProductFileteredPlans(): Observable<ProductPlanInterface[]> {
+        return this.http.get<ProductPlanInterface[]>(`${this.apiUrl}productionPlanItemsViewSet/`);
+    }
 
     createPlan(planData: Partial<ProductPlanInterface>): Observable<ProductPlanInterface> {
         return this.http.post<ProductPlanInterface>(`${this.apiUrl}production-plans/`, planData);
@@ -37,6 +41,9 @@ export class ProductPlanService {
     // 🔹 Položky
     loadItemPlans(): Observable<ProductPlanProductsInterface[]> {
         return this.http.get<ProductPlanProductsInterface[]>(`${this.apiUrl}production-plan-items/`);
+    }
+    loadFilteredItemPlans(): Observable<ProductPlanProductsInterface[]> {
+        return this.http.get<ProductPlanProductsInterface[]>(`${this.apiUrl}productionPlanItemsViewSet/`);
     }
 
     updateItemPlan(id: number, itemData: Partial<ProductPlanProductsInterface>): Observable<ProductPlanProductsInterface> {
@@ -58,5 +65,21 @@ export class ProductPlanService {
     // Delete product
     deleteProductForPlans(id: number): Observable<ProductPlanProductsInterface> {
         return this.http.delete<ProductPlanProductsInterface>(`${this.apiUrl}production-plan-items/${id}/`);
+    }
+
+
+
+    // ✅ Kanál pre vybrané dáta
+    private selectedPlanItemSource = new BehaviorSubject<any | null>(null);
+    selectedPlanItem$: Observable<any | null> = this.selectedPlanItemSource.asObservable();
+
+    // Uloží dáta (spustí sa v ProductionCardPlansComponent)
+    setSelectedPlanItem(itemData: any) {
+        this.selectedPlanItemSource.next(itemData);
+    }
+
+    // Vyčistí dáta po ich spracovaní
+    clearSelectedPlanItem() {
+        this.selectedPlanItemSource.next(null);
     }
 }

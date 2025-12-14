@@ -66,11 +66,25 @@ export const routes: Routes = [
                         .then(m => m.ProductPlanComponent),
             },
             {
+                path: 'productCard',
+                // canActivate: [roleGuard],
+                loadComponent: () =>
+                    import('./core/components/product-card/product-card.component')
+                        .then(m => m.ProductCardComponent),
+            },
+            {
                 path: 'testComponent',
                 canActivate: [roleGuard],
                 loadComponent: () =>
                     import('./core/components/test/test.component')
                         .then(m => m.TestComponent),
+            },
+            {
+                path: 'production-card-plans',
+                canActivate: [roleGuard],
+                loadComponent: () =>
+                    import('./core/components/production-card-plans/production-card-plans.component')
+                        .then(m => m.ProductionCardPlansComponent),
             },
             { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
         ],

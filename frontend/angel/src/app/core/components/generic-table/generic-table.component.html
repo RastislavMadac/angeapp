@@ -1,52 +1,58 @@
+
+
 <div class="table-wrapper">
 
-<table class="app-table"> 
+  <table class="app-table">
 
-  <thead> 
+    <thead>
+      <tr>
+        <!-- Hlavičky tabuľky -->
+        <th *ngFor="let col of headers"
+            class="tooltip-header"
+            style="cursor: pointer; user-select: none;"
+            [attr.title]="col.fullLabel || col.label || col.key">
+          <span>{{ col.label || col.key }}</span>
+          <button mat-icon-button (click)="sortData(col.key)">
+            <mat-icon>
+              {{ sortColumn === col.key ? (sortAsc ? 'arrow_upward' : 'arrow_downward') : 'unfold_more' }}
+            </mat-icon>
+          </button>
+        </th>
+      </tr>
+    </thead>
 
-    <tr> 
+    <tbody>
+      <ng-container *ngFor="let row of filteredData">
+        <!-- Hlavný riadok -->
+        <tr (click)="onRowClick(row)"
+            [class.selected]="isSelected(row)"
+            [ngClass]="rowClassMap(row)">
+          <td *ngFor="let col of headers"
+              class="tooltip-cell"
+              [attr.title]="getValue(row, col.key)"
+              [ngClass]="cellClassMap[col.key] ? cellClassMap[col.key](getValue(row, col.key), row) : ''">
+            {{ getValue(row, col.key) }}
+          </td>
+        </tr>
 
-      <!-- Hlavičky tabuľky --> 
+       <!-- Collapsible detail -->
+<tr *ngIf="isSelected(row) && detailTemplate">
+  <td [attr.colspan]="headers.length">
+    <div class="detail-collapse">
+      <button class="toggle-btn" (click)="toggleCollapse(row)">
+        {{ showCollapse[rowKey(row)] ? 'Skryť detail' : 'Zobraziť detail' }}
+      </button>
 
-      <th *ngFor="let col of headers" style="cursor: pointer; user-select: none;">
-        <span>{{ col.label || col.key }}</span>
-        <button mat-icon-button (click)="sortData(col.key)">
-          <mat-icon>
-            {{ sortColumn === col.key ? (sortAsc ? 'arrow_upward' : 'arrow_downward') : 'unfold_more' }}
-          </mat-icon>
-        </button>
+      <div *ngIf="showCollapse[rowKey(row)]" class="collapse-content">
+        <ng-container *ngTemplateOutlet="detailTemplate; context: { $implicit: row }"></ng-container>
+      </div>
+    </div>
+  </td>
+</tr>
 
+      </ng-container>
+    </tbody>
 
-      </th> 
-   <!-- tlačidlo alebo ikonka zoradenia -->
-  
-    </tr> 
-   
-     
-
-  </thead> 
-
-  <tbody> 
-
-    <tr *ngFor="let row of filteredData" 
-        (click)="onRowClick(row)" 
-        [class.selected]="isSelected(row)" 
-        [ngClass]="rowClassMap(row)">  
-
-      <td *ngFor="let col of headers"> 
-        {{ getValue(row, col.key) }} 
-      </td> 
-
-   
-    
-
-    </tr> 
-
-  </tbody> 
-
-   
-
-</table> 
+  </table>
 
 </div>
- 

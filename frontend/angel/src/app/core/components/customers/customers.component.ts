@@ -6,6 +6,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { combineLatest, map, BehaviorSubject, Observable } from 'rxjs';
 
 // Interfaces
 import { CustomersInterface } from '../../interface/customer.interface';
@@ -50,6 +51,9 @@ export class CustomersComponent implements OnInit {
   selectedCustomer: CustomersInterface | null = null; // Aktuálne vybraný zákazník
   customerForm: FormGroup | null = null; // Reactive form pre zákazníka
 
+  filteredData$: Observable<CustomersInterface[]>;
+  private filterSubject = new BehaviorSubject<CustomersInterface[]>([]);
+
   columns: TableColumn[] = [
     { key: 'id', label: 'Kód', type: 'number' },
     { key: 'internet_id', label: 'Internet kód', type: 'text' },
@@ -79,7 +83,37 @@ export class CustomersComponent implements OnInit {
     private notify: NotificationService,
     private filterService: FilterService,
     private cdr: ChangeDetectorRef
-  ) { }
+  ) {
+    this.filteredData$ = combineLatest([
+      this.filterSubject.asObservable(),
+      this.filterService.filters$
+    ]).pipe(
+      map(([customer, filters]) => {
+
+        if (!filters.length) return customer;
+
+
+
+
+        return customer.filter(customer =>
+
+          filters.every(f =>
+
+            Object.values(customer).some(v =>
+
+              v != null && this.filterService.normalizeFilter(v).includes(f)
+
+            )
+
+          )
+
+        );
+
+      })
+
+    );
+
+  }
 
   // --------------------------
   // --- Lifecycle hook ---
@@ -105,6 +139,7 @@ export class CustomersComponent implements OnInit {
       next: customers => {
         this.customer = customers.map(c => ({ ...c }));
         this.isLoading = false;
+        this.filterSubject.next(this.customer);
       },
       error: err => {
         console.error(err);

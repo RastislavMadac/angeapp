@@ -22,7 +22,7 @@ export class MasterLayoutComponent<T = any> implements OnChanges {
   @Input() selectedItem: T | null = null;
 
   // Nové voliteľné šablóny pre collapsible verziu
-  @Input() collapsibleTemplateInput: any;
+  @Input() collapsibleTemplateInput?: TemplateRef<any>;
 
   showCollapse = false;
 

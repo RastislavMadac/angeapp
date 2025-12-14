@@ -16,4 +16,6 @@ export interface TableColumn {
 
     /** voliteľne – custom template pre špeciálne stĺpce (napr. tlačidlá) */
     template?: any;
+    fullLabel?: string;
+
 }

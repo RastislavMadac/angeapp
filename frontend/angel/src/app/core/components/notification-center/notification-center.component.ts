@@ -1,6 +1,8 @@
-import { Component, OnInit } from '@angular/core';
-import { NotificationService, NotificationType } from '../../servicies/notification.service';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { Subscription } from 'rxjs';
+// Uisti sa, že importuješ aj interface NotificationData, ak ho máš v service
+import { NotificationService, NotificationType, NotificationData } from '../../servicies/notification.service';
 
 @Component({
   selector: 'app-notification-center',
@@ -9,36 +11,60 @@ import { CommonModule } from '@angular/common';
   templateUrl: './notification-center.component.html',
   styleUrls: ['./notification-center.component.css']
 })
-export class NotificationCenterComponent implements OnInit {
-  notification: { message: string, type?: NotificationType } | null = null;
-  confirmMessage: string | null = null;
-  private confirmResponse!: (result: boolean) => void;
+export class NotificationCenterComponent implements OnInit, OnDestroy {
 
+  // Používame typ NotificationData pre bezpečnosť
+  notification: NotificationData | null = null;
+  confirmMessage: string | null = null;
+
+  private confirmResponse: ((result: boolean) => void) | null = null;
+  private timeoutId: any;
+  private subs = new Subscription(); // Pre správne odhlásenie odberov
 
   constructor(private notifyService: NotificationService) { }
 
   ngOnInit() {
-    // Notifications (info / warn)
-    this.notifyService.notifications$.subscribe(msg => {
+    // 1. Notifikácie (Toast)
+    const notifSub = this.notifyService.notifications$.subscribe(msg => {
       this.notification = msg;
-      setTimeout(() => this.notification = null, 8000); // automatické skrytie po 3s
-    });
 
-    // Confirms – manuálne zatváranie
-    this.notifyService.confirms$.subscribe(({ message, response }) => {
+      // DÔLEŽITÉ: Ak už beží odpočet pre predchádzajúcu správu, zrušíme ho
+      if (this.timeoutId) {
+        clearTimeout(this.timeoutId);
+      }
+
+      // Nastavíme nový odpočet (3 sekundy sú pre používateľa ideálne, 8 je dlho)
+      this.timeoutId = setTimeout(() => {
+        this.notification = null;
+      }, 3000);
+    });
+    this.subs.add(notifSub);
+
+    // 2. Potvrdenia (Confirm)
+    const confirmSub = this.notifyService.confirms$.subscribe(({ message, response }) => {
       this.confirmMessage = message;
       this.confirmResponse = response;
     });
+    this.subs.add(confirmSub);
   }
 
-  // potvrdenie confirm správy
+  // Akcia: Užívateľ klikol Áno/Nie
   respond(result: boolean) {
-    this.confirmResponse(result);
-    this.confirmMessage = null;
+    if (this.confirmResponse) {
+      this.confirmResponse(result);
+    }
+    this.closeConfirm();
   }
 
-  // manuálne zatvorenie confirm správy
+  // Akcia: Zatvorenie okna (X)
   closeConfirm() {
     this.confirmMessage = null;
+    this.confirmResponse = null;
+  }
+
+  // Upratovanie pri zničení komponentu
+  ngOnDestroy() {
+    this.subs.unsubscribe();
+    if (this.timeoutId) clearTimeout(this.timeoutId);
   }
 }

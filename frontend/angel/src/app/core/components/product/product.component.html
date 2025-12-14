@@ -1,124 +1,173 @@
 <app-navbar
   [selectedItem]="selectedProduct"
   (deleteItem)="onDeleteProduct($event)"
-   (create)="createNewProduct()"
-   (edit)="selectProduct($event)">
+  (create)="createNewProduct()"
+  (edit)="selectProduct($event)">
 </app-navbar>
 
-
-
-
-
+<ng-template #detailTpl>
+  <form *ngIf="productForm" [formGroup]="productForm" (ngSubmit)="saveProduct()" class="modern-form">
     
-    <ng-template #detailTpl>
-      <form *ngIf="productForm" [formGroup]="productForm" (ngSubmit)="saveProduct()"class="product-grid">
-        <label class="product1">Produkt ID:
-            <input formControlName="product_id">
-          </label><br>
-        
-          <label class="product2">Internet ID:
-            <input formControlName="internet_id">
-          </label><br>
-        
-          <label class="product3">Názov produktu:
-            <input formControlName="product_name">
-          </label><br>
-        
-          <label class="product4">Popis:
-            <textarea formControlName="description"></textarea>
-          </label><br>
-        
-          <label class="product5">Hmotnosť položky:
-            <input type="number" formControlName="weight_item">
-          </label><br>
-        
-          <label class="product7">Internet:
-            <input type="checkbox" formControlName="internet">
-          </label><br>
-        
-          <label class="product8">EAN kód:
-            <input formControlName="ean_code">
-          </label><br>
-        
-          <label class="product9">QR kód:
-            <input formControlName="qr_code">
-          </label><br>
-        
-          <label class="product10"> Cena bez DPH:
-            <input type="number" formControlName="price_no_vat">
-          </label><br>
-        
-          <label class="product11">Celkové množstvo:
-            <input type="number" formControlName="total_quantity">
-          </label><br>
-        
-          <label class="product12">Rezervované množstvo:
-            <input type="number" formControlName="reserved_quantity">
-          </label><br>
+    <div class="card header-card">
+      <div class="header-row">
+        <div class="id-badge">
+          <label>ID Produktu</label>
+          <input formControlName="product_id" readonly>
+        </div>
 
-          <label class="product12">Minimalne množstvo:
-            <input type="number" formControlName="minimum_on_stock">
-          </label><br>
+        <div class="toggles-container" style="display: flex; gap: 15px;">
+          
+          <div class="toggle-wrapper">
+            <label class="switch">
+              <input type="checkbox" formControlName="is_serialized">
+              <span class="slider round"></span>
+            </label>
+            <span class="toggle-label">Sériový</span>
+          </div>
 
-          <label class="product12">DPH:
-            <input type="number" formControlName="tax_rate">
-          </label><br>
+          <div class="toggle-wrapper">
+            <label class="switch">
+              <input type="checkbox" formControlName="internet">
+              <span class="slider round"></span>
+            </label>
+            <span class="toggle-label">Internet</span>
+          </div>
+
+          <div class="toggle-wrapper">
+            <label class="switch">
+              <input type="checkbox" formControlName="is_serialized"> 
+              <span class="slider round"></span>
+            </label>
+            <span class="toggle-label">Aktívny</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="main-input">
+        <label>Názov produktu</label>
+        <input formControlName="product_name" placeholder="Zadajte názov produktu...">
+      </div>
+    </div>
+
+    <div class="cards-grid">
+
+      <div class="card full-width">
+        <h3><i class="icon-info"></i> Základné informácie</h3>
         
-          <label class="product13">Voľné množstvo:
-            <input type="number" formControlName="free_quantity">
-          </label><br>
-        
-          <!-- Ak chceš, môžeš doplniť selecty pre vzťahové entity -->
-          <label class="product14">Kategória:
+        <div class="input-group">
+          <label>Popis</label>
+          <textarea formControlName="description" rows="3"></textarea>
+        </div>
+
+        <div class="row-3">
+          <div class="input-group">
+            <label>Kategória</label>
             <select formControlName="category">
               <option *ngFor="let c of categories" [ngValue]="c">{{ c.name }}</option>
             </select>
-          </label><br>
-        
-          <label class="product15">Jednotka:
-            <select formControlName="unit">
-              <option *ngFor="let u of unit" [ngValue]="u">{{ u.name }}</option>
-            </select>
-          </label ><br>
-        
-          <label class="product16">Typ produktu:
+          </div>
+
+          <div class="input-group">
+            <label>Typ produktu</label>
             <select formControlName="product_type">
               <option *ngFor="let pt of productType" [ngValue]="pt">{{ pt.name }}</option>
             </select>
-          </label><br>
+          </div>
+
+          <div class="input-group">
+            <label>Jednotka</label>
+            <select formControlName="unit">
+              <option *ngFor="let u of unit" [ngValue]="u">{{ u.name }}</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3><i class="icon-barcode"></i> Identifikátory</h3>
+        <div class="input-group">
+          <label>Internet ID</label>
+          <input formControlName="internet_id">
+        </div>
+        <div class="row-2">
+          <div class="input-group">
+            <label>EAN kód</label>
+            <input formControlName="ean_code">
+          </div>
+          <div class="input-group">
+            <label>QR kód</label>
+            <input formControlName="qr_code">
+          </div>
+        </div>
+        <div class="input-group">
+          <label>Hmotnosť (kg)</label>
+          <input type="number" formControlName="weight_item">
+        </div>
+      </div>
+
+      <div class="card">
+        <h3><i class="icon-wallet"></i> Cena a Sklad</h3>
         
-          <label class="product17">Sériový produkt:
-            <input type="checkbox" formControlName="is_serialized">
-          </label><br>
-        <label class="product18">Aktívny: <input type="checkbox" formControlName="is_serialized"></label><br>
-        <button type="submit" [disabled]="productForm.invalid">
-          {{ selectedProduct ? 'Uložiť' : 'Vytvoriť' }}
-        </button>
-      </form>
-    </ng-template>
-    
-   
-    <app-master-layout
-      [masterTemplateInput]="masterTpl"
-      [detailTemplateInput]="detailTpl"
-      [items]="product"
-      [(selectedItem)]="selectedProduct"
-      (select)="selectProduct($event)">
-    </app-master-layout>
-    
-    <ng-template #masterTpl>
-      <app-generic-table
-      [columns]="columns"
-      [data]="product"
-      [selectedItem]="selectedProduct"
-      (rowClick)="selectProduct($event)">
-    </app-generic-table>
-    </ng-template>
-    
- 
-    
-    
-    
-    
-    
-    
+        <div class="row-2">
+          <div class="input-group">
+            <label>Cena bez DPH</label>
+            <input type="number" formControlName="price_no_vat">
+          </div>
+          <div class="input-group">
+            <label>DPH (%)</label>
+            <input type="number" formControlName="tax_rate">
+          </div>
+        </div>
+
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 15px 0;">
+
+        <div class="row-2">
+          <div class="input-group">
+            <label>Celkové množstvo</label>
+            <input type="number" formControlName="total_quantity">
+          </div>
+          <div class="input-group">
+            <label>Voľné</label>
+            <input type="number" formControlName="free_quantity">
+          </div>
+        </div>
+        
+        <div class="row-2">
+          <div class="input-group">
+            <label>Rezervované</label>
+            <input type="number" formControlName="reserved_quantity">
+          </div>
+          <div class="input-group">
+            <label>Minimálne na sklade</label>
+            <input type="number" formControlName="minimum_on_stock">
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="form-footer">
+      <button type="submit" [disabled]="productForm.invalid" class="btn-primary">
+        {{ selectedProduct ? 'Uložiť produkt' : 'Vytvoriť produkt' }}
+      </button>
+    </div>
+
+  </form>
+</ng-template>
+
+<app-master-layout
+  [masterTemplateInput]="masterTpl"
+  [detailTemplateInput]="detailTpl"
+  [items]="product"
+  [(selectedItem)]="selectedProduct"
+  (select)="selectProduct($event)">
+</app-master-layout>
+
+<ng-template #masterTpl>
+  <app-generic-table
+    [columns]="columns"
+    [data]="(filteredData$ | async) ?? []" 
+    [selectedItem]="selectedProduct"
+    (rowClick)="selectProduct($event)">
+  </app-generic-table>
+</ng-template>
