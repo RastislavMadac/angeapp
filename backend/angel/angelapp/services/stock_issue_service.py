@@ -2,7 +2,7 @@ from decimal import Decimal
 from django.db import transaction
 from django.db.models import Max
 from django.utils import timezone
-
+from django.db import transaction
 from angelapp.models import ProductIngredient, StockIssue, StockIssueItem, Product, Order
 from angelapp.services.stock_service import issue_product, return_product
 
@@ -18,6 +18,7 @@ class StockIssueService:
         """
         Vytvorí výdajku zo všetkých položiek prijatej objednávky.
         Odpočíta total_quantity, reserved_quantity a prepíše free_quantity.
+        Aktualizuje status objednávky na 'processing' alebo 'completed'.
         """
         # vytvorenie výdajky
         stock_issue = StockIssue.objects.create(
@@ -42,8 +43,6 @@ class StockIssueService:
             # 🟢 až potom samotný produkt
             issue_product(product, order_item.quantity)
 
-           
-
             # vytvorenie položky výdajky
             issue_item = StockIssueItem.objects.create(
                 stock_issue=stock_issue,
@@ -60,7 +59,26 @@ class StockIssueService:
                     inst.status = "shipped"
                     inst.save(update_fields=["status"])
 
+        # ==============================
+        # ✅ aktualizácia statusu objednávky
+        # ==============================
+        all_items_completed = True
+        for order_item in order.items.all():
+            # spočíta, koľko už bolo vydané
+            issued_qty = sum(
+                si_item.quantity
+                for si in order.stock_issues.all()
+                for si_item in si.items.filter(order_item=order_item)
+            )
+            if issued_qty < order_item.quantity:
+                all_items_completed = False
+                break
+
+        order.status = 'completed' if all_items_completed else 'processing'
+        order.save(update_fields=['status'])
+
         return stock_issue
+
 
     @staticmethod
     def generate_issue_number():
@@ -141,9 +159,15 @@ class StockIssueService:
                 for inst in item.instances.all():
                     inst.status = "assigned"
                     inst.save(update_fields=["status"])
-
-        # označíme výdajku ako stornovanú
+      
+                # označíme výdajku ako stornovanú
         issue.is_storno = True
         issue.save(update_fields=["is_storno"])
+    
+
+        transaction.on_commit(
+            lambda: print("2🔥 COMMIT PREBEHOL – ZMENY SA ULOŽILI")
+        )
+
 
         

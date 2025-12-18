@@ -212,7 +212,9 @@ class OrderItemSerializer(serializers.ModelSerializer):
     product = serializers.StringRelatedField(read_only=True)
     product_name = serializers.CharField(source='product.name', read_only=True)
     product_code = serializers.CharField(source='product.product_id', read_only=True)
-
+    issued_quantity = serializers.SerializerMethodField()
+    remaining_quantity = serializers.SerializerMethodField()
+    status = serializers.SerializerMethodField()
     product_id = serializers.PrimaryKeyRelatedField(
         queryset=Product.objects.all(),
         source="product"  # stále mapuje na FK
@@ -225,11 +227,19 @@ class OrderItemSerializer(serializers.ModelSerializer):
         model = OrderItem
         fields = [
     "id", "product_id", "product", "product_name", "product_code",
-    "quantity", "price", "total_price", "is_expedited", "status", "production_card"
+    "quantity",  "issued_quantity",  
+            "remaining_quantity",  "total_price", "is_expedited", "status", "production_card"
 ]
 
         read_only_fields = ["id", "product", "product_name", "product_code", "total_price","is_expedited"]
-
+    def get_status(self, obj):
+        issued = obj.issued_quantity()
+        if issued == 0:
+            return "pending"
+        elif issued < obj.quantity:
+            return "partially completed"
+        else:
+            return "completed"
     def get_total_price(self, obj):
         return (obj.quantity or 0) * (obj.price or 0)
 
@@ -244,7 +254,11 @@ class OrderItemSerializer(serializers.ModelSerializer):
         if value <= 0:
             raise serializers.ValidationError("Quantity must be greater than 0.")
         return value
+    def get_issued_quantity(self, obj):
+        return obj.issued_quantity()
 
+    def get_remaining_quantity(self, obj):
+        return obj.remaining_quantity()
 
 # -----------------------
 # Serializer pre order
@@ -695,60 +709,7 @@ class ProductionPlanSerializer(serializers.ModelSerializer):
 
         return plan
 
-    # def update(self, instance, validated_data):
-    #     items_data = validated_data.pop("items", None)
-        
-    #     # NOVÝ DEBUG KÓD
-    #     print(f"DEBUG_PLAN_UPDATE: Typ inštancie: {type(instance)}")
-    #     print(f"DEBUG_PLAN_UPDATE: ID inštancie: {getattr(instance, 'id', 'N/A')}")
-    #     print(f"DEBUG_PLAN_UPDATE: Kontext v hlavnom ser. obsahuje 'request': {'request' in self.context}")
-    #     # KONIEC NOVÉHO DEBUG KÓDU
-        
-
-    #     # --- Update hlavného plánu ---
-    #     for attr, value in validated_data.items():
-    #         setattr(instance, attr, value)
-    #     instance.save()
-
-    #     plan_instance = instance
-        
-    #     if items_data is not None:
-    #         # Existujúce položky do dict {id: instance}
-    #         existing_items = {item.id: item for item in plan_instance.items.all()}
-
-    #         for item_data in items_data:
-    #             item_id = item_data.get("id", None)
-
-    #             if item_id and item_id in existing_items:
-    #                 # --- Update existujúcej položky ---
-    #                 item_instance = existing_items[item_id]
-
-    #                 # ✅ OPRAVA: Použite kontext so spread operátorom **self.context
-    #                 item_serializer = ProductionPlanItemSerializer(
-    #                     item_instance,
-    #                     data=item_data,
-    #                     partial=True,
-    #                     context={**self.context, "production_plan": plan_instance} 
-    #                 )
-    #                 item_serializer.is_valid(raise_exception=True)
-    #                 item_serializer.save()
-                
-    #             else: 
-    #                 # --- Vytvorenie novej položky ---
-    #                 # ... overenie požadovaných polí ...
-                    
-    #                 # ✅ OPRAVA: Použite kontext so spread operátorom **self.context
-    #                 new_item_serializer = ProductionPlanItemSerializer(
-    #                     data=item_data,
-    #                     context={**self.context, "production_plan": plan_instance} 
-    #                 )
-    #                 new_item_serializer.is_valid(raise_exception=True)
-    #                 ProductionPlanItem.objects.create(
-    #                     production_plan=instance,
-    #                     **new_item_serializer.validated_data
-    #                 )
-
-    #     return instance
+    
 
 
 
@@ -1048,7 +1009,7 @@ class StockIssueItemSerializer(serializers.ModelSerializer):
 # StockIssueSerializer
 # -----------------------
 class StockIssueSerializer(serializers.ModelSerializer):
-    items = StockIssueItemSerializer(many=True)
+    items = StockIssueItemSerializer(many=True, read_only=True)
     order_number = serializers.CharField(
         source="order.order_number",
         read_only=True
@@ -1065,34 +1026,19 @@ class StockIssueSerializer(serializers.ModelSerializer):
             "note",
             "items",
         ]
-        read_only_fields = ["issued_at"]
+        read_only_fields = ["issue_number", "issued_at", "items"] 
 
     @transaction.atomic
     def create(self, validated_data):
-        items_data = validated_data.pop("items")
         user = self.context["request"].user
 
+        # vytvorenie hlavnej výdajky
         stock_issue = StockIssue.objects.create(
             created_by=user,
             **validated_data
         )
 
-        for item_data in items_data:
-            instances_data = item_data.pop("instances", [])
-
-            issue_item = StockIssueItem.objects.create(
-                stock_issue=stock_issue,
-                **item_data
-            )
-
-            # serializované kusy
-            if issue_item.product.is_serialized:
-                for inst in instances_data:
-                    issue_item.instances.create(
-                        product_instance=inst["id"]
-                    )
-
-        # 🔥 TU sa robí bezpečný výdaj produktov
+        # 🔥 bezpečný výdaj produktov podľa existujúcich položiek
         for item in stock_issue.items.select_related("product"):
             item.product.issue(item.quantity)
 
@@ -1103,3 +1049,4 @@ class StockIssueSerializer(serializers.ModelSerializer):
                     instance.save(update_fields=["status"])
 
         return stock_issue
+

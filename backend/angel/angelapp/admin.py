@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import User, Product, ProductType, Category, Unit,ProductInstance,ProductIngredient,City,Company,Order,OrderItem,ProductionPlan, ProductionPlanItem, ProductionCard, StockReceipt,StockIssue,StockIssueItem
+from .models import User, Product, ProductType, Category, Unit,ProductInstance,ProductIngredient,City,Company,Order,OrderItem,ProductionPlan, ProductionPlanItem, ProductionCard, StockReceipt,StockIssue,StockIssueItem,StockIssueInstance
 from django.utils.translation import gettext_lazy as _
 
 @admin.register(User)
@@ -39,7 +39,7 @@ class ProductIngredientInline(admin.TabularInline):
 # Admin pre produkt
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ['id','product_name', 'product_type', 'total_quantity','reserved_quantity', 'free_quantity','price_no_vat']
+    list_display = ['id','product_name', 'product_type', 'total_quantity','is_serialized','reserved_quantity', 'free_quantity','price_no_vat']
     list_filter = ['product_type', 'category']
     search_fields = ['product_name', 'product_id']
     inlines = [ProductIngredientInline]
@@ -56,10 +56,10 @@ for model in [Category, Unit]:
 
 @admin.register(ProductInstance)
 class ProductInstanceAdmin(admin.ModelAdmin):
-    list_display = ("id","product", "serial_number")
-    list_filter = ("id","product", "serial_number")
-    search_fields = ("id","product", "serial_number")
-
+    list_display = ("id", "product", "serial_number", "status")  # zobrazíme aj status
+    list_filter = ("product", "status")  # filtrovať podľa produktu a statusu
+    search_fields = ("id", "product__name", "serial_number")  # search podľa názvu produktu
+    list_editable = ("status",)  # umožníme inline edit statusu
 @admin.register(ProductType)
 class ProductTypeAdmin(admin.ModelAdmin):
     list_display = ("id","name", "description")
@@ -231,3 +231,12 @@ class StockIssueInline(admin.TabularInline):
     model = StockIssue
     extra = 0
     readonly_fields = ("issue_number", "status", "issued_at")
+@admin.register(StockIssueInstance)
+class StockIssueItemInstanceAdmin(admin.ModelAdmin):
+    list_display = ("id", "stock_issue_item", "product_instance")
+    list_filter = ("stock_issue_item", "product_instance__product")
+    search_fields = (
+        "stock_issue_item__id",
+        "product_instance__serial_number",
+        "product_instance__product__product_name",
+    )

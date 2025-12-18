@@ -3,7 +3,7 @@ from django.contrib.auth.models import AbstractUser
 from django.forms import ValidationError
 from django.utils import timezone
 from decimal import Decimal
-
+from django.db.models import Sum
 # -----------------------
 # User
 # -----------------------
@@ -187,7 +187,7 @@ class ProductInstance(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="instances")
     serial_number = models.CharField(max_length=50, unique=True)  # NFC UID
     created_at = models.DateTimeField(auto_now_add=True)
-    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='priradene')
+    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='assigned')
 
     def __str__(self):
         return f"{self.product} - {self.serial_number}"
@@ -278,6 +278,7 @@ class Order(models.Model):
         choices=[
             ("pending", "Čaká sa"),
             ("processing", "Spracováva sa"),
+            ("partially completed", "Čiastocne prenesená"),
             ("completed", "Dokončená"),
             ("canceled", "Zrušená"),
         ],
@@ -309,16 +310,26 @@ class OrderItem(models.Model):
     is_expedited = models.BooleanField(default=False)
 
     production_card = models.ForeignKey('ProductionCard', null=True, blank=True, on_delete=models.SET_NULL)
+    STATUS_PENDING = "pending"
+    STATUS_IN_PRODUCTION = "in_production"
+    STATUS_PARTIAL = "partially completed"   # 🔥 rovnaká hodnota
+    STATUS_COMPLETED = "completed"
+    STATUS_CANCELED = "canceled"
+
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Čaká sa"),
+        (STATUS_IN_PRODUCTION, "Vo výrobe"),
+        (STATUS_PARTIAL, "Čiastočne prenesená"),
+        (STATUS_COMPLETED, "Dokončené"),
+        (STATUS_CANCELED, "Zrušené"),
+    ]
+
     status = models.CharField(
-    max_length=20,
-    choices=[
-        ("pending", "Čaká sa"),
-        ("in_production", "Vo výrobe"),
-        ("completed", "Dokončené"),
-        ("canceled", "Zrušené"),
-    ],
-    default="pending",
-)
+        max_length=30,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING
+    )
+
 
 
     def __str__(self):
@@ -327,7 +338,22 @@ class OrderItem(models.Model):
     @property
     def total_price(self):
        return (self.quantity or 0) * (self.price or 0)
-
+    def issued_quantity(self):
+        """
+        Vráti sumu množstva tohto produktu, ktoré už bolo vydané vo výdajkách.
+        Ignoruje stornované výdajky.
+        """
+        return (
+        self.stock_issue_items
+        .filter(stock_issue__is_storno=False)
+        .aggregate(total=models.Sum("quantity"))["total"]
+        or 0
+    )
+    def remaining_quantity(self) -> int:
+        """
+        Vracia množstvo, ktoré ešte nebolo prenesené.
+        """
+        return self.quantity - self.issued_quantity()
 
 
 #-----------------------
@@ -593,9 +619,11 @@ class StockIssue(models.Model):
 
     @transaction.atomic
     def issue(self):
+        import inspect
+        print("Called from:", inspect.stack()[1].filename, inspect.stack()[1].lineno)
         for item in self.items.select_related("product"):
             item.product.issue(item.quantity)
-
+            print(item.product.product_name)
             if item.product.is_serialized:
                 for instance in item.instances.all():
                     instance.status = "shipped"
@@ -639,6 +667,7 @@ class StockIssueItem(models.Model):
 
     order_item = models.ForeignKey(
         OrderItem,
+        related_name="stock_issue_items",
         on_delete=models.SET_NULL,
         null=True,
         blank=True
