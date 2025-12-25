@@ -8,13 +8,14 @@ from django.utils import timezone
 from django.shortcuts import render
 from rest_framework import viewsets,filters
 
+from angelapp import permissions
 from angelapp.services.stock_service import issue_product
 from angelapp.services.stock_issue_service import StockIssueService
 from rest_framework.exceptions import MethodNotAllowed
 
 from angelapp.permissions import IsAdminOrManager, IsAdmin
-from .models import StockIssueItem, User,ProductType, Category, Unit, Product,ProductInstance,ProductIngredient,Company,Order,OrderItem,ProductionCard,ProductionPlan,ProductionPlanItem,StockReceipt
-from .serializers import ProductionPlansSerializer, UserSerializer,ProductTypeSerializer, CategorySerializer, UnitSerializer, ProductSerializer,ProductInstanceSerializer,ProductIngredientSerializer,CompanySerializer,OrderItemSerializer,OrderSerializer,  ProductionPlanSerializer,ProductionPlanItemSerializer,    ProductionCardSerializer,StockReceiptSerializer,ProductForProductPlanSerializer,StockIssueSerializer,StockIssue
+from .models import Expedition, ExpeditionItem, ItemQualityCheck, StockIssueItem, User,ProductType, Category, Unit, Product,ProductInstance,ProductIngredient,Company,Order,OrderItem,ProductionCard,ProductionPlan,ProductionPlanItem,StockReceipt
+from .serializers import AssignSerialSerializer, ExpeditionItemSerializer, ExpeditionSerializer, ItemQualityCheckSerializer, ProductionPlansSerializer, UserSerializer,ProductTypeSerializer, CategorySerializer, UnitSerializer, ProductSerializer,ProductInstanceSerializer,ProductIngredientSerializer,CompanySerializer,OrderItemSerializer,OrderSerializer,  ProductionPlanSerializer,ProductionPlanItemSerializer,    ProductionCardSerializer,StockReceiptSerializer,ProductForProductPlanSerializer,StockIssueSerializer,StockIssue
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied
@@ -32,7 +33,10 @@ from rest_framework.viewsets import ModelViewSet
 from django.db.models import Sum, Q
 from angelapp.services.production_card_service import ProductionCardService
 from rest_framework.exceptions import ValidationError as DRFValidationError # Import DRF chyby
-from django.core.exceptions import ValidationError as DjangoValidationError #
+from django.core.exceptions import ValidationError as DjangoValidationError 
+from django_filters.rest_framework import DjangoFilterBackend
+
+from django.shortcuts import get_object_or_404
 
 
 
@@ -909,7 +913,6 @@ class ProductForProductPlanViewSet(viewsets.ReadOnlyModelViewSet):
 # -----------------------
 
 
-
 class StockIssueViewSet(ModelViewSet):
     queryset = StockIssue.objects.all().prefetch_related("items", "items__instances")
     serializer_class = StockIssueSerializer
@@ -991,7 +994,7 @@ class StockIssueViewSet(ModelViewSet):
 
             else:
                 # fallback na automatický výber podľa statusu
-                instances = list(order_item.product.instances.filter(status="assigned")[:int(qty)])
+                instances = list(order_item.product.instances.filter(status="manufactured")[:int(qty)])
                 if len(instances) < qty:
                     return Response({"detail": f"Nedostatok serializovaných kusov pre {order_item.product.product_name}"}, status=400)
 
@@ -1086,4 +1089,281 @@ class StockIssueViewSet(ModelViewSet):
 
         return Response({"detail": "Výdajka bola úspešne stornovaná"}, status=200)
 
-# kk
+
+
+class ExpeditionItemViewSet(viewsets.ModelViewSet):
+    queryset = ExpeditionItem.objects.all()
+    serializer_class = ExpeditionItemSerializer
+    permission_classes = [IsAuthenticated]
+
+    @action(detail=True, methods=["delete"], url_path="delete-safe")
+    def delete_safe(self, request, pk=None):
+        """
+        Bezpečné vymazanie položky z expedície.
+        - Nepovolí zmazať už expedované položky
+        - Neovplyvní issued_quantity v OrderItem
+        """
+        item = get_object_or_404(ExpeditionItem, pk=pk)
+
+        # overenie stavu produktu
+        if item.product_instance and item.product_instance.status == "shipped":
+            return Response(
+                {"detail": "Tento kus už bol expedovaný a nie je možné ho vymazať."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # zmažeme len položku expedície, neovplyvníme issued_quantity
+        item.delete()
+
+        return Response(
+            {"detail": f"Položka {item.id} bola bezpečne odstránená z expedície."},
+            status=status.HTTP_200_OK
+        )
+
+
+class ExpeditionViewSet(viewsets.ModelViewSet):
+    queryset = Expedition.objects.all()
+    serializer_class = ExpeditionSerializer
+    permission_classes = [IsAuthenticated]
+
+
+    
+
+    @action(detail=True, methods=["post"])
+    def close(self, request, pk=None):
+        expedition = self.get_object()
+        ExpeditionService.close_expedition(expedition)
+        return Response({"detail": "Expedícia uzavretá"})
+
+
+    @action(detail=True, methods=['get'])
+    def items_status(self, request, pk=None):
+        """
+        Endpoint: GET /api/expeditionscd ~/projekty/angeltab/backend/angel/{id}/items_status/
+        Vráti pre každú položku objednávky koľko už bolo expedované
+        a koľko zostáva.
+        """
+        expedition = self.get_object()
+        order = expedition.order
+
+        status_list = []
+        for item in order.items.all():
+            total_issued = StockIssueItem.objects.filter(
+                order_item=item
+            ).aggregate(total=Sum('quantity'))['total'] or 0
+
+            remaining_qty = item.quantity - total_issued
+
+            status_list.append({
+                'order_item_id': item.id,
+                'product_name': item.product.product_name,
+                'total_ordered': item.quantity,
+                'total_issued': total_issued,
+                'remaining_qty': remaining_qty
+            })
+
+        return Response(status_list, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['post'], url_path='assign-serial')
+    
+    def assign_serial(self, request):
+        serializer = AssignSerialSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        expedition = data['expedition']
+        order_item = data['order_item']
+        product_instance = data['product_instance']
+
+        # 🔹 nájdeme PRVÝ voľný riadok bez S/N
+        item = ExpeditionItem.objects.filter(
+            expedition=expedition,
+            order_item=order_item,
+            product_instance__isnull=True
+        ).first()
+
+        if not item:
+            return Response(
+                {
+                    "detail": "Pre túto položku už nie je voľný riadok na priradenie S/N."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 🔹 priradenie S/N
+        item.product_instance = product_instance
+        item.save()
+
+        return Response(
+            {
+                "detail": "S/N úspešne priradené",
+                "expedition_item_id": item.id,
+                "product_instance": product_instance.serial_number,
+            },
+            status=status.HTTP_200_OK
+        )
+
+    def create(self, request, *args, **kwargs):
+        order_id = request.data.get("order")
+
+        if order_id:
+            existing = Expedition.objects.filter(
+                order_id=order_id
+            ).exclude(
+                status=Expedition.STATUS_SHIPPED
+            ).first()
+
+            if existing:
+                # 🔥 DOPLNÍME CHÝBAJÚCE RIADKY
+                if not existing.items.exists():
+                    serializer = self.get_serializer()
+                    serializer.create_items_for_expedition(existing)
+
+                return Response(
+                    self.get_serializer(existing).data,
+                    status=status.HTTP_200_OK
+                )
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        expedition = serializer.save(created_by=request.user)
+
+        # 🔥 HNEĎ PO VYTVORENÍ
+        serializer.create_items_for_expedition(expedition)
+
+        return Response(
+            self.get_serializer(expedition).data,
+            status=status.HTTP_201_CREATED
+        )
+
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+
+        old_status = instance.status
+        print(f"[DEBUG] OLD status: {old_status}, NEW data: {request.data}")
+
+        # Upravíme serializer bez toho, aby sme hneď menili status na 'shipped'
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        expedition = serializer.save()  # status je stále 'ready'
+        print(f"[DEBUG] Expedícia uložená – ID: {expedition.id}, status: {expedition.status}")
+
+        new_status = request.data.get("status")
+        if old_status != Expedition.STATUS_READY and new_status == Expedition.STATUS_READY:
+            print("[DEBUG] Zavoláme close() a vytvoríme StockIssue")
+            expedition.close()  # tu sa status prepíše na 'shipped'
+            stock_issue = StockIssueService.create_from_expedition(expedition)
+            print(f"[DEBUG] StockIssue vytvorená – ID: {getattr(stock_issue, 'id', None)}")
+
+        return Response(self.get_serializer(expedition).data)
+
+
+    @action(detail=True, methods=['delete'], url_path='delete-item/(?P<item_id>[^/.]+)')
+    def delete_item(self, request, pk=None, item_id=None):
+        expedition = self.get_object()
+        try:
+            item = expedition.items.get(id=item_id)
+            item.delete()
+            return Response({"detail": f"Item {item_id} vymazaný"}, status=status.HTTP_204_NO_CONTENT)
+        except ExpeditionItem.DoesNotExist:
+            return Response({"detail": "Item neexistuje"}, status=status.HTTP_404_NOT_FOUND)
+# -----------------------
+# ItemQualityCheckViewSet
+# -----------------------
+
+class ItemQualityCheckViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint pre ItemQualityCheck.
+    Podporuje GET/POST/PUT/DELETE.
+    Filtrovanie: product_instance, serial_number, defect_status
+    """
+    queryset = ItemQualityCheck.objects.all().select_related(
+        "product_instance", "product_instance__product", "manufactured_by", "checked_by"
+    )
+    serializer_class = ItemQualityCheckSerializer
+    permission_classes = [IsAuthenticated, IsAdminOrManager]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+
+    # Filtre
+    filterset_fields = {
+        'product_instance': ['exact'],
+        'product_instance__serial_number': ['exact', 'icontains'],
+        'defect_status': ['exact'],
+        'approved_for_shipping': ['exact'],
+        'checked_at': ['exact', 'gte', 'lte'],
+    }
+
+    # Hľadanie a zoradenie
+    search_fields = ['product_instance__serial_number', 'product_instance__product__product_name']
+    ordering_fields = ['checked_at', 'manufacture_date', 'product_instance__serial_number']
+    ordering = ['-checked_at']  # default zoradenie
+
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if instance.approved_for_shipping:
+            return Response(
+                {"message": "Táto kontrola je zamknutá a už sa nedá upravovať."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        return super().update(request, *args, **kwargs)
+
+
+
+
+# -----------------------
+# QualityErrorReportView Report chybovosti
+# -----------------------
+class QualityErrorReportView(APIView):
+
+    def get(self, request):
+        qs = ItemQualityCheck.objects.values(
+            "product_instance__product__id",
+            "product_instance__product__product_name"
+        ).annotate(
+            total_checked=Count("id"),
+            total_defective=Count("id", filter=Q(defect_status="error"))
+        )
+
+        report = []
+        for row in qs:
+            defect_rate = 0
+            if row["total_checked"]:
+                defect_rate = row["total_defective"] / row["total_checked"] * 100
+
+            report.append({
+                "product_id": row["product_instance__product__id"],
+                "product_name": row["product_instance__product__product_name"],
+                "total_checked": row["total_checked"],
+                "total_defective": row["total_defective"],
+                "defect_rate": round(defect_rate, 2)
+            })
+
+        return Response(report)
+
+
+
+# -----------------------
+# CheckSerialNumberView
+# -----------------------
+class CheckSerialNumberView(APIView):
+    """
+    Endpoint pre kontrolu, či sériové číslo existuje.
+    POST payload: { "serial_number": "A12345" }
+    """
+
+    def post(self, request, *args, **kwargs):
+        serial_number = request.data.get("serial_number", "").strip()
+        if not serial_number:
+            return Response(
+                {"error": "serial_number je povinný."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        exists = ProductInstance.objects.filter(serial_number=serial_number).exists()
+
+        return Response({"exists": exists})
+
+
+

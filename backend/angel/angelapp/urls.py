@@ -1,6 +1,6 @@
 from django.urls import path,include
 from rest_framework import routers 
-from .views import  ProductionPlansViewSet, UserViewSet,CustomAuthToken,CurrentUserView, ProductTypeViewSet, CategoryViewSet, UnitViewSet, ProductViewSet,ProductInstanceViewSet,ProductIngredientViewSet,ManufacturedProductViewSet,ManufacturedIngredientsProductViewSet,CurrentUserView,CompanyViewSet,OrderViewSet,OrderItemViewSet,get_product_by_code,ProductionPlanItemViewSet,ProductionPlanViewSet,ProductionCardViewSet,StockReceiptViewSet,ProductForProductPlanViewSet,StockIssueViewSet
+from .views import  CheckSerialNumberView, ExpeditionItemViewSet, ExpeditionViewSet, ProductionPlansViewSet, UserViewSet,CustomAuthToken,CurrentUserView, ProductTypeViewSet, CategoryViewSet, UnitViewSet, ProductViewSet,ProductInstanceViewSet,ProductIngredientViewSet,ManufacturedProductViewSet,ManufacturedIngredientsProductViewSet,CurrentUserView,CompanyViewSet,OrderViewSet,OrderItemViewSet,get_product_by_code,ProductionPlanItemViewSet,ProductionPlanViewSet,ProductionCardViewSet,StockReceiptViewSet,ProductForProductPlanViewSet,StockIssueViewSet,ItemQualityCheckViewSet
 from . import views
 
 router=routers.DefaultRouter() 
@@ -23,6 +23,10 @@ router.register(r'stock-receipts', StockReceiptViewSet, basename='stock-receipt'
 router.register(r'productForProductPlan', ProductForProductPlanViewSet, basename='productForProductPlan')
 router.register(r'productionPlanItemsViewSet', ProductionPlansViewSet, basename='productionPlanItemsViewSet')
 router.register(r"stock-issues", StockIssueViewSet, basename="stock-issue")
+router.register(r'quality-checks', ItemQualityCheckViewSet, basename='quality-check')
+router.register(r'expeditions', ExpeditionViewSet, basename='expedition')
+router.register(r'expedition-items', ExpeditionItemViewSet, basename='expedition-item')
+
 
 
 
@@ -33,7 +37,8 @@ urlpatterns = [
     path('login/', CustomAuthToken.as_view(), name='api-login'),
     path('current-user/', CurrentUserView.as_view(),  name='current-user'),
 #   path('products/by-id/', get_product_by_code, name='get-product-by-id'),
-    path('products/by-code/', get_product_by_code, name='get-product-by-code')
+    path('products/by-code/', get_product_by_code, name='get-product-by-code'),
+    path('check-serial-number/', CheckSerialNumberView.as_view(), name='check-serial-number')
    
 
 ]

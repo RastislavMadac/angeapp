@@ -169,5 +169,41 @@ class StockIssueService:
             lambda: print("2🔥 COMMIT PREBEHOL – ZMENY SA ULOŽILI")
         )
 
+   
+
+
+    @staticmethod
+    @transaction.atomic
+    def create_from_expedition(expedition):
+        print(f"[DEBUG] create_from_expedition volané pre expedíciu ID: {expedition.id}")  # 🔹
+        # ochrana pred duplicitou
+        if expedition.stock_issue:
+            print(f"[DEBUG] Expedícia už má StockIssue – ID: {expedition.stock_issue.id}")  # 🔹
+            return expedition.stock_issue
+
+        issue = StockIssue.objects.create(
+            expedition=expedition,
+            issued_by=expedition.created_by,
+            issued_at=timezone.now(),
+        )
+        print(f"[DEBUG] StockIssue objekt vytvorený – ID: {issue.id}")  # 🔹
+        for item in expedition.items.select_related(
+            "order_item",
+            "product_instance"
+        ):
+            print(f"[DEBUG] Vytvárame StockIssueItem pre položku ID: {item.id}")  # 🔹
+            StockIssueItem.objects.create(
+                stock_issue=issue,
+                order_item=item.order_item,
+                product_instance=item.product_instance,
+                quantity=item.quantity,
+                unit_price=item.unit_price,
+            )
+
+        expedition.stock_issue = issue
+        expedition.save(update_fields=["stock_issue"])
+        print(f"[DEBUG] Expedícia aktualizovaná – stock_issue ID: {expedition.stock_issue.id}")  # 🔹
+        return issue
+
 
         

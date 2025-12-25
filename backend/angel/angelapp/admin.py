@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import User, Product, ProductType, Category, Unit,ProductInstance,ProductIngredient,City,Company,Order,OrderItem,ProductionPlan, ProductionPlanItem, ProductionCard, StockReceipt,StockIssue,StockIssueItem,StockIssueInstance
+from .models import Expedition, ExpeditionItem, User, Product, ProductType, Category, Unit,ProductInstance,ProductIngredient,City,Company,Order,OrderItem,ProductionPlan, ProductionPlanItem, ProductionCard, StockReceipt,StockIssue,StockIssueItem,StockIssueInstance
 from django.utils.translation import gettext_lazy as _
 
 @admin.register(User)
@@ -83,6 +83,11 @@ class CompanyAdmin(admin.ModelAdmin):
 @admin.register(OrderItem)
 class OrderItemAdmin(admin.ModelAdmin):
     list_display = ("id", "product", "quantity", "price", "total_price")
+
+    search_fields = (
+        "order__order_number",
+        "product__product_name",
+    )
     readonly_fields = ("total_price",)
 
 
@@ -240,3 +245,59 @@ class StockIssueItemInstanceAdmin(admin.ModelAdmin):
         "product_instance__serial_number",
         "product_instance__product__product_name",
     )
+
+class ExpeditionItemInline(admin.TabularInline):
+    model = ExpeditionItem
+    extra = 0
+    autocomplete_fields = ["order_item", "product_instance"]
+    readonly_fields = (
+        "product_name",
+        "product_instance_serial",
+    )
+
+    def product_name(self, obj):
+        return obj.order_item.product.product_name if obj.order_item else "-"
+
+    def product_instance_serial(self, obj):
+        return obj.product_instance.serial_number if obj.product_instance else "-"
+
+    product_name.short_description = "Produkt"
+    product_instance_serial.short_description = "S/N"
+
+@admin.register(ExpeditionItem)
+class ExpeditionItemAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "expedition",
+        "product_name",
+        "product_instance_serial",
+        "unit_price",
+    )
+
+    search_fields = (
+        "product_instance__serial_number",
+        "order_item__product__product_name",
+    )
+
+    list_filter = ("expedition__status",)
+
+    autocomplete_fields = ["order_item", "product_instance"]
+
+    def product_name(self, obj):
+        return obj.order_item.product.product_name
+
+    def product_instance_serial(self, obj):
+        return obj.product_instance.serial_number if obj.product_instance else "-"
+
+    product_name.short_description = "Produkt"
+    product_instance_serial.short_description = "S/N"
+@admin.register(Expedition)
+class ExpeditionAdmin(admin.ModelAdmin):
+    list_display = ('id', 'order', 'order_number', 'status', 'closed_at')
+    list_filter = ('status',)
+    search_fields = ['order__order_number', 'id']
+    inlines = [ExpeditionItemInline]
+
+    def order_number(self, obj):
+        return obj.order.order_number
+    order_number.admin_order_field = 'order__order_number'

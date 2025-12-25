@@ -4,6 +4,9 @@ from django.forms import ValidationError
 from django.utils import timezone
 from decimal import Decimal
 from django.db.models import Sum
+from django.db.models import Q, UniqueConstraint
+
+
 # -----------------------
 # User
 # -----------------------
@@ -75,6 +78,7 @@ class Product(models.Model):
 
     category = models.ForeignKey(Category, on_delete=models.PROTECT, related_name="products")
     product_type = models.ForeignKey(ProductType, on_delete=models.PROTECT, related_name="products")
+   
     unit = models.ForeignKey(Unit, on_delete=models.PROTECT, related_name="products")
 
     ingredients_m2m = models.ManyToManyField(
@@ -187,7 +191,7 @@ class ProductInstance(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="instances")
     serial_number = models.CharField(max_length=50, unique=True)  # NFC UID
     created_at = models.DateTimeField(auto_now_add=True)
-    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='assigned')
+    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='manufactured')
 
     def __str__(self):
         return f"{self.product} - {self.serial_number}"
@@ -306,13 +310,14 @@ class OrderItem(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="items")
     product = models.ForeignKey(Product, on_delete=models.PROTECT)
     quantity = models.PositiveIntegerField(default=1)
+   
     price = models.DecimalField(max_digits=10, decimal_places=2, default=0)  # cena v čase objednávky
     is_expedited = models.BooleanField(default=False)
 
     production_card = models.ForeignKey('ProductionCard', null=True, blank=True, on_delete=models.SET_NULL)
     STATUS_PENDING = "pending"
     STATUS_IN_PRODUCTION = "in_production"
-    STATUS_PARTIAL = "partially completed"   # 🔥 rovnaká hodnota
+    STATUS_PARTIAL = "partially_completed"   # 🔥 rovnaká hodnota
     STATUS_COMPLETED = "completed"
     STATUS_CANCELED = "canceled"
 
@@ -587,7 +592,9 @@ class StockReceipt(models.Model):
         return True
 
     
-
+#-----------------------
+# StockReceipt
+#-----------------------
 
 class StockIssue(models.Model):
  
@@ -651,6 +658,10 @@ class StockIssue(models.Model):
         self.status = 'storno'
         self.save(update_fields=["status"])
 
+
+#-----------------------
+# StockIssueItem
+#-----------------------
 class StockIssueItem(models.Model):
     stock_issue = models.ForeignKey(
         StockIssue,
@@ -676,7 +687,9 @@ class StockIssueItem(models.Model):
     def __str__(self):
         return f"{self.quantity} x {self.product.product_name}"
 
-
+#-----------------------
+# StockIssueInstance
+#-----------------------
 class StockIssueInstance(models.Model):
     stock_issue_item = models.ForeignKey(
         StockIssueItem,
@@ -692,3 +705,219 @@ class StockIssueInstance(models.Model):
     def __str__(self):
         return f"{self.product_instance.serial_number}"
 
+#-----------------------
+# ItemQualityCheck
+#-----------------------
+class ItemQualityCheck(models.Model):
+    # --- Produkt / konkrétny kus ---
+    product_instance = models.OneToOneField(
+    ProductInstance,
+    on_delete=models.PROTECT,
+    related_name="quality_check",
+    verbose_name="Kus produktu"
+)
+
+    # --- Výroba ---
+    manufactured_by = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="manufactured_quality_items",
+        verbose_name="Vyrobil"
+    )
+    manufacture_date = models.DateField(
+        verbose_name="Dátum výroby"
+    )
+
+    # --- Typy kontroly ---
+    visual_check = models.BooleanField(default=False, verbose_name="Vizuálna kontrola")
+    packaging_check = models.BooleanField(default=False, verbose_name="Kontrola balenia")
+
+    # --- Chybovosť ---
+    STATUS_CHOICES = (
+        ("ok", "Bez chyby"),
+        ("error", "Chyba"),
+    )
+    defect_status = models.CharField(
+        max_length=10,
+        choices=STATUS_CHOICES,
+        default="ok",
+        verbose_name="Status chybovosti"
+    )
+    defect_description = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name="Popis chyby"
+    )
+
+    # --- Kontrola ---
+    checked_by = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="checked_quality_items",
+        verbose_name="Kontroloval"
+    )
+    checked_at = models.DateField(
+        auto_now_add=True,
+        verbose_name="Dátum kontroly"
+    )
+
+    # --- Expedícia ---
+    approved_for_shipping = models.BooleanField(
+        default=False,
+        verbose_name="Povolené k expedícii"
+    )
+
+    # --- Meta ---
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.product_instance} | {self.defect_status}"
+
+    # --- Validácia ---
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if self.defect_status == "error" and not self.defect_description:
+            raise ValidationError("Pri chybe musí byť vyplnený popis chyby.")
+
+    # --- Automatická zmena statusu ProductInstance ---
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.product_instance:
+            if self.defect_status == "ok":
+                self.product_instance.status = "inspected"
+            else:
+                self.product_instance.status = "defective"
+            self.product_instance.save(update_fields=["status"])
+
+
+#-----------------------
+# Expedition
+#-----------------------
+
+class Expedition(models.Model):
+    STATUS_DRAFT = "draft"
+    STATUS_READY = "ready"
+    STATUS_SHIPPED = "shipped"
+
+    STATUS_CHOICES = [
+        (STATUS_DRAFT, "Rozpracovaná"),
+        (STATUS_READY, "Pripravená"),
+        (STATUS_SHIPPED, "Odoslaná"),
+    ]
+
+    order = models.ForeignKey(
+        'Order',
+        on_delete=models.PROTECT,
+        related_name="expeditions"
+    )
+
+    stock_issue = models.OneToOneField(
+        'StockIssue',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="expedition"
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_DRAFT
+    )
+
+    closed_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(
+        'User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="expeditions_created"
+    )
+
+    def __str__(self):
+        return f"Expedícia #{self.id} - {self.order.order_number or self.order.id}"
+
+    def close(self):
+        if self.status != self.STATUS_READY:
+            raise ValidationError("Expedícia musí byť vo stave 'ready' pred uzavretím.")
+
+        self.status = self.STATUS_SHIPPED
+        self.closed_at = timezone.now()
+        self.save(update_fields=["status", "closed_at"])
+
+        for item in self.items.all():
+            item.mark_as_shipped()
+
+        # voláme StockIssueService mimo models.py, napr. vo view alebo signal
+
+
+    
+    
+
+#-----------------------
+# ExpeditionItem
+#-----------------------
+
+class ExpeditionItem(models.Model):
+    expedition = models.ForeignKey(
+        Expedition,
+        on_delete=models.CASCADE,
+        related_name="items"
+    )
+
+    order_item = models.ForeignKey(
+        'OrderItem',
+        on_delete=models.PROTECT
+    )
+
+    product_instance = models.OneToOneField(
+    'ProductInstance',
+    on_delete=models.PROTECT,
+    related_name="expedition_item",
+    null=True,
+    blank=True
+)
+
+    stock_issue_item = models.OneToOneField(
+        'StockIssueItem',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True
+    )
+
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2)
+    quantity = models.PositiveIntegerField(default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        serial = self.product_instance.serial_number if self.product_instance else "No S/N"
+        product_name = self.order_item.product.product_name if self.order_item else "Unknown product"
+        return f"{serial} | {product_name}"
+
+   
+    def clean(self):
+        if not self.product_instance:
+         return
+
+        if self.product_instance.status != 'inspected':
+            raise ValidationError(
+                f"Produkt {self.product_instance.serial_number} neprešiel kontrolou."
+            )
+
+    @transaction.atomic
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+        if self.product_instance:
+            if self.product_instance.status != 'shipped':
+                self.product_instance.status = 'shipped'
+                self.product_instance.save(update_fields=["status"])
+
+    def mark_as_shipped(self):
+            if self.product_instance:
+                self.product_instance.status = 'shipped'
+                self.product_instance.save(update_fields=['status'])

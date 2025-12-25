@@ -1,13 +1,15 @@
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
-from .models import User,Product, ProductType, Category, Unit,ProductInstance,ProductIngredient, Company,Order,OrderItem,StockReceipt,ProductionPlanItem,ProductionPlan,ProductionCard,StockIssue, StockIssueItem
+
+from angelapp.services.stock_issue_service import StockIssueService
+from .models import Expedition, ExpeditionItem, ItemQualityCheck, User,Product, ProductType, Category, Unit,ProductInstance,ProductIngredient, Company,Order,OrderItem,StockReceipt,ProductionPlanItem,ProductionPlan,ProductionCard,StockIssue, StockIssueItem
 from rest_framework.authtoken.models import Token
 import re
 from django.core.exceptions import ObjectDoesNotExist
 from django.utils import timezone
 from rest_framework.exceptions import APIException
 from django.db import transaction
-
+from django.db.models import Sum
 # USERS
 class UserSerializer(serializers.ModelSerializer):
 
@@ -82,7 +84,7 @@ class ProductSerializer(serializers.ModelSerializer):
         model = Product
         fields = [
             'id', 'product_id', 'internet_id', 'category', 'category_name',
-            'unit', 'unit_name', 'product_type', 'product_type_name',
+            'unit', 'unit_name', 'product_type','code', 'product_type_name',
             'is_serialized', 'product_name', 'description', 'ingredients',
             'weight_item', 'internet', 'ean_code', 'qr_code', 'price_no_vat',
             'total_quantity', 'reserved_quantity', 'free_quantity','minimum_on_stock','tax_rate',
@@ -134,7 +136,7 @@ class ProductInstanceSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ProductInstance
-        fields = ["id", "product", "product_name", "serial_number", "created_at"]
+        fields = ["id", "product", "product_name", "serial_number", "created_at","status"]
         read_only_fields = ["id", "created_at"]  # tieto polia sa neodovzdávajú pri POST/PUT
         depth = 1
 
@@ -146,6 +148,27 @@ class ProductInstanceSerializer(serializers.ModelSerializer):
             )
         return value
     
+    def validate_product(self, value):
+        # povolené inštancovanie iba ak product_id obsahuje 'MANUFACTURED'
+        if "MANUFACTURED" not in value.product_id.upper():
+            raise serializers.ValidationError(
+                f"Produkt '{value.product_name}' nemôže byť inštanciovaný – product_id neobsahuje 'MANUFACTURED'."
+            )
+        return value
+    def validate(self, attrs):
+        # iba pri UPDATE
+        if self.instance:
+            old_status = self.instance.status
+            new_status = attrs.get("status", old_status)
+
+            
+            if old_status == "shipped" and new_status != old_status:
+                raise serializers.ValidationError({
+                    "status": "Status 'shipped' je uzamknutý a nedá sa meniť."
+                })
+
+        return attrs
+
 
 # -----------------------
 # Product ingredients
@@ -1049,4 +1072,603 @@ class StockIssueSerializer(serializers.ModelSerializer):
                     instance.save(update_fields=["status"])
 
         return stock_issue
+
+
+
+# -----------------------
+# ItemQualityCheckSerializer
+# -----------------------
+class ItemQualityCheckSerializer(serializers.ModelSerializer):
+    # ---------- VSTUPY Z FRONTENDU ----------
+    product_id = serializers.PrimaryKeyRelatedField(
+        queryset=Product.objects.all(),
+        write_only=True
+    )
+    serial_number = serializers.CharField(write_only=True)
+
+    manufacture_date = serializers.DateField()
+    visual_check = serializers.BooleanField()
+    packaging_check = serializers.BooleanField()
+
+    defect_status = serializers.ChoiceField(
+        choices=ItemQualityCheck.STATUS_CHOICES
+    )
+    defect_description = serializers.CharField(
+        allow_blank=True,
+        allow_null=True,
+        required=False
+    )
+
+    approved_for_shipping = serializers.BooleanField()
+
+    # ---------- READ-ONLY VÝSTUPY ----------
+    product_instance_id = serializers.IntegerField(
+        source="product_instance.id",
+        read_only=True
+    )
+    instance_serial_number = serializers.CharField(
+        source="product_instance.serial_number",
+        read_only=True
+    )
+    product_name = serializers.CharField(
+        source="product_instance.product.product_name",
+        read_only=True
+    )
+
+    manufactured_by = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(),  # všetci existujúci používatelia
+        required=True
+    )
+    checked_by = serializers.StringRelatedField(read_only=True)
+
+    checked_at = serializers.DateField(read_only=True)
+    created_at = serializers.DateTimeField(read_only=True)
+    updated_at = serializers.DateTimeField(read_only=True)
+
+    class Meta:
+        model = ItemQualityCheck
+        fields = [
+            "id",
+
+            # identifikácia
+            "product_id",
+            "serial_number",
+            "product_instance_id",
+            "instance_serial_number",
+            "product_name",
+
+            # výroba
+            "manufacture_date",
+            "manufactured_by",
+
+            # kontrola
+            "visual_check",
+            "packaging_check",
+            "defect_status",
+            "defect_description",
+            "checked_by",
+            "checked_at",
+
+            # expedícia
+            "approved_for_shipping",
+
+            # meta
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "product_instance_id",
+            "instance_serial_number",
+            "product_name",
+            "manufactured_by",
+            "checked_by",
+            "checked_at",
+            "created_at",
+            "updated_at",
+        ]
+
+    def validate(self, data):
+        # 0️⃣ Zamknutá kontrola (update)
+        if self.instance and self.instance.approved_for_shipping:
+            raise serializers.ValidationError(
+                "Táto kontrola je zamknutá a už sa nedá upravovať (schválená na expedíciu)."
+            )
+
+        # 1️⃣ Chyba → musí byť popis
+        defect_status = data.get(
+            "defect_status",
+            getattr(self.instance, "defect_status", "ok")
+        )
+        defect_description = data.get(
+            "defect_description",
+            getattr(self.instance, "defect_description", None)
+        )
+        if defect_status == "error" and not defect_description:
+            raise serializers.ValidationError({
+                "defect_description": "Pri chybe musí byť vyplnený popis chyby."
+            })
+
+        # 2️⃣ Ak je chyba → expedícia nesmie byť povolená
+        if defect_status == "error":
+            data["approved_for_shipping"] = False
+        approved_for_shipping = data.get(
+            "approved_for_shipping",
+            getattr(self.instance, "approved_for_shipping", False)
+        )
+        if defect_status == "error" and approved_for_shipping:
+            raise serializers.ValidationError({
+                "approved_for_shipping": "Chybný výrobok nemôže byť povolený na expedíciu."
+            })
+
+        # 3️⃣ Produkt musí byť MANUFACTURED (toto sa upravuje)
+        # POZOR: pri POST ešte nie je product_instance, takže kontrolujeme product_id
+        product = data.get("product_id")
+        if not product:
+            raise serializers.ValidationError({
+                "product_id": "Produkt je povinný."
+            })
+
+        # ak je objekt (PrimaryKeyRelatedField tak už je objekt)
+        if hasattr(product, "code") and product.code.strip().upper() != "MANUFACTURED":
+            raise serializers.ValidationError({
+                "product_id": "K tomuto produktu nie je možné priradiť S/N (nie je MANUFACTURED)."
+            })
+
+        return data
+       
+
+    def validate_serial_number(self, value):
+        value = value.strip()
+
+        if ProductInstance.objects.filter(serial_number=value).exists():
+            raise serializers.ValidationError(
+                "Toto sériové číslo už existuje."
+            )
+        return value
+
+ 
+    # ---------- CREATE ----------
+    def create(self, validated_data):
+        request = self.context["request"]
+
+        product = validated_data.pop("product_id")
+        serial_number = validated_data.pop("serial_number")
+
+        # 1️⃣ vytvor ProductInstance
+        instance = ProductInstance.objects.create(
+            product=product,
+            serial_number=serial_number,
+            status="manufactured"
+        )
+
+        # 2️⃣ vytvor QualityCheck
+        quality_check = ItemQualityCheck.objects.create(
+            product_instance=instance,
+            
+            checked_by=request.user,
+            **validated_data
+        )
+
+        return quality_check
+
+
+# -----------------------
+# ProductErrorReportSerializer Report chybovosti
+# -----------------------
+class ProductErrorReportSerializer(serializers.Serializer):
+    product_id = serializers.IntegerField()
+    product_name = serializers.CharField()
+    total_checked = serializers.IntegerField()
+    total_defective = serializers.IntegerField()
+    defect_rate = serializers.FloatField()
+
+# -----------------------
+# ExpeditionItemSerializer
+# -----------------------
+
+
+class ExpeditionItemSerializer(serializers.ModelSerializer):
+    product_instance_serial = serializers.CharField(
+        source='product_instance.serial_number',
+        read_only=True
+    )
+    product_name = serializers.CharField(
+        source='order_item.product.product_name',
+        read_only=True
+    )
+
+    order_item = serializers.PrimaryKeyRelatedField(
+        queryset=OrderItem.objects.all()
+    )
+
+    product_instance = serializers.PrimaryKeyRelatedField(
+        queryset=ProductInstance.objects.all(),
+        required=False,
+        allow_null=True
+    )
+
+# pridáme množstvo, ktoré chceme vydávať (default 1 pre serializované)
+    quantity = serializers.IntegerField()
+    class Meta:
+        model = ExpeditionItem
+        fields = [
+            "id",
+            "order_item",
+            "product_instance",
+            "product_instance_serial",
+            "product_name",
+            "unit_price",
+            "stock_issue_item",
+            "quantity",
+        ]
+
+
+    def get_quantity(self, obj):
+        """
+        Serializované produkty: 1 kus
+        Neseializované produkty: skutočné množstvo v objekte
+        """
+        product = getattr(obj, 'order_item', None) and getattr(obj.order_item, 'product', None)
+        product_type = getattr(product, 'product_type', None) if product else None
+        code = getattr(product_type, 'code', '') if product_type else ''
+        
+        if code and code.upper() == 'MANUFACTURED':
+            return 1
+        
+        return getattr(obj, 'quantity', 1)
+
+    
+    def validate_product_instance(self, value):
+        if value and value.status != "inspected":
+            raise serializers.ValidationError(
+                f"Produkt {value.serial_number} neprešiel kontrolou."
+            )
+        return value
+
+    # ExpeditionItemSerializer
+
+    def validate(self, attrs):
+        # Získa order_item z dát, alebo z existujúcej inštancie
+        order_item = attrs.get("order_item") or getattr(self.instance, 'order_item', None)
+        if not order_item:
+            raise serializers.ValidationError({
+                "order_item": "order_item je povinné pole alebo chýba v instance."
+            })
+
+        # Získa product_instance z dát alebo z existujúcej inštancie
+        product_instance = attrs.get("product_instance") or getattr(self.instance, "product_instance", None)
+        if product_instance and product_instance.status != "inspected":
+            raise serializers.ValidationError({
+                "product_instance": f"Produkt {product_instance.serial_number} neprešiel kontrolou."
+            })
+
+        return attrs
+
+    def to_representation(self, instance):
+        rep = super().to_representation(instance)
+
+        product_type_code = (
+            getattr(
+                getattr(instance.order_item.product, 'product_type', None),
+                'code',
+                None
+            ) or ''
+        ).upper()
+
+        if product_type_code == 'MANUFACTURED':
+            rep['quantity'] = 1
+
+        return rep
+
+# -----------------------
+# ExpeditionSerializer
+# ----------------------- 
+
+class ExpeditionSerializer(serializers.ModelSerializer):
+    items = ExpeditionItemSerializer(many=True, required=False)
+    prepared_items = serializers.SerializerMethodField()
+    order_number = serializers.CharField(
+        source='order.order_number', read_only=True
+    )
+
+    class Meta:
+        model = Expedition
+        fields = [
+            "id",
+            "order",
+            "order_number",
+            "status",
+            "closed_at",
+            "items",
+            "prepared_items",
+            "stock_issue",
+        ]
+        read_only_fields = ["stock_issue", "closed_at"]
+
+    # -----------------------
+    # Read-only prepared_items
+    # -----------------------
+    def get_prepared_items(self, obj):
+        items_list = []
+        for item in obj.order.items.all():
+            product_type = getattr(item.product, 'product_type', None)
+            code = (getattr(product_type, 'code', '') or '').upper()
+
+            if code == 'MANUFACTURED':
+                for _ in range(item.quantity):
+                    items_list.append({
+                        'order_item': item.id,
+                        'product_name': item.product.product_name,
+                        'unit_price': item.price,
+                        'product_instance': None
+                    })
+            else:
+                items_list.append({
+                    'order_item': item.id,
+                    'product_name': item.product.product_name,
+                    'unit_price': item.price,
+                    'quantity': item.quantity,
+                    'product_instance': None
+                })
+        return items_list
+
+    # -----------------------
+    # Funkcia pre vytvorenie položiek do expedície
+    # -----------------------
+    def create_items_for_expedition(self, expedition):
+        order = expedition.order
+
+        for order_item in order.items.all():
+            product_type = getattr(order_item.product, 'product_type', None)
+            code = (getattr(product_type, 'code', '') or '').upper()
+
+            if code == 'MANUFACTURED':
+                # pre serializované produkty: 1 riadok = 1 kus
+                existing_count = ExpeditionItem.objects.filter(
+                    expedition=expedition,
+                    order_item=order_item,
+                    product_instance__isnull=True
+                ).count()
+                remaining_qty = order_item.quantity - existing_count
+                if remaining_qty > 0:
+                    for _ in range(remaining_qty):
+                        ExpeditionItem.objects.create(
+                            expedition=expedition,
+                            order_item=order_item,
+                            product_instance=None,
+                            unit_price=order_item.price
+                        )
+            else:
+                # pre neseializované produkty: 1 riadok = všetky zostávajúce ks
+                existing_sum = ExpeditionItem.objects.filter(
+                expedition=expedition,
+                order_item=order_item,
+                product_instance__isnull=True
+                ).aggregate(total=Sum('quantity'))['total'] or 0
+                remaining_qty = order_item.quantity - existing_sum
+                if remaining_qty > 0:
+                    ExpeditionItem.objects.create(
+                        expedition=expedition,
+                        order_item=order_item,
+                        product_instance=None,
+                        unit_price=order_item.price,
+                        quantity=remaining_qty  # všetky zostávajúce kusy
+                    )
+
+    # -----------------------
+    # Create
+    # -----------------------
+    def create(self, validated_data):
+        expedition = Expedition.objects.create(**validated_data)
+        self.create_items_for_expedition(expedition)
+        return expedition
+
+    # -----------------------
+    # Update
+    # -----------------------
+    def update(self, instance, validated_data):
+        items_data = validated_data.pop('items', [])
+
+        # Odstránime status, aby sa neuložil predčasne
+        new_status = validated_data.pop('status', None)
+        print(f"[DEBUG] OLD status: {instance.status}, NEW status: {new_status}, validated_data: {validated_data}")
+
+        # Aktualizujeme základné polia expedície
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        print(f"[DEBUG] Expedícia uložená – ID: {instance.id}, status: {instance.status}")
+
+        # 🔥 Ak sa mení status na READY, zavoláme close()
+        if new_status == Expedition.STATUS_READY and instance.status != Expedition.STATUS_SHIPPED:
+            print("[DEBUG] Zavoláme close()")
+            instance.close()
+            print(f"[DEBUG] Po close() – status: {instance.status}, closed_at: {instance.closed_at}")
+
+            # 2️⃣ Vytvoríme StockIssue cez službu
+            print("[DEBUG] Voláme StockIssueService.create_from_expedition()")
+            stock_issue = StockIssueService.create_from_expedition(instance)
+            print(f"[DEBUG] StockIssue vytvorená – ID: {getattr(stock_issue, 'id', None)}")
+
+        # Mapujeme existujúce položky
+        existing_items = {item.id: item for item in instance.items.all()}
+
+        for item_data in items_data:
+            item_id = item_data.get('id')
+            if not item_id:
+                raise serializers.ValidationError("ID položky je povinné pre update.")
+
+            item = existing_items.get(item_id)
+            if not item:
+                raise serializers.ValidationError(f"Položka s ID {item_id} neexistuje v tejto expedícii.")
+
+            # Úprava množstva (len pre neserializované produkty)
+            if not getattr(item.order_item.product, 'is_serialized', False):
+                new_qty = item_data.get('quantity', item.quantity)
+                item.quantity = new_qty
+
+            # Aktualizujeme ostatné polia okrem 'id', 'order_item', 'quantity'
+            for attr, value in item_data.items():
+                if attr not in ('id', 'order_item', 'quantity'):
+                    setattr(item, attr, value)
+
+            item.save()
+
+        return instance
+
+# -----------------------
+ #AssignSerialSerializer
+# ----------------------- 
+
+class AssignSerialSerializer(serializers.Serializer):
+    expedition = serializers.PrimaryKeyRelatedField(
+        queryset=Expedition.objects.all()
+    )
+    order_item = serializers.PrimaryKeyRelatedField(
+        queryset=OrderItem.objects.all()
+    )
+    serial_number = serializers.CharField()
+
+    def validate(self, data):
+        serial = data["serial_number"]
+        order_item = data["order_item"]
+        expected_product = order_item.product
+
+        # 1️⃣ existuje ProductInstance?
+        try:
+            instance = ProductInstance.objects.select_related("product").get(
+                serial_number=serial
+            )
+        except ProductInstance.DoesNotExist:
+            raise serializers.ValidationError({
+                "serial_number": {
+                    "code": "NOT_FOUND",
+                    "message": "Výrobné číslo neexistuje. Je potrebná kontrola kvality.",
+                    "expected_product": {
+                        "id": expected_product.id,
+                        "name": expected_product.product_name,
+                    }
+                }
+            })
+
+        # skúsime nájsť quality check (ak existuje)
+        quality_check = getattr(instance, "quality_check", None)
+
+        qc_data = None
+        if quality_check:
+            qc_data = {
+                "id": quality_check.id,
+                "status": quality_check.defect_status,
+                "approved_for_shipping": quality_check.approved_for_shipping,
+                "checked_by": str(quality_check.checked_by),
+                "checked_at": quality_check.checked_at,
+            }
+
+        # 2️⃣ sedí produkt?
+        if instance.product_id != expected_product.id:
+            raise serializers.ValidationError({
+                "serial_number": {
+                    "code": "WRONG_PRODUCT",
+                    "message": "Výrobné číslo patrí k inému produktu.",
+                    "serial_number": instance.serial_number,
+                    "expected_product": {
+                        "id": expected_product.id,
+                        "name": expected_product.product_name,
+                    },
+                    "actual_product": {
+                        "id": instance.product.id,
+                        "name": instance.product.product_name,
+                    },
+                    "quality_check": qc_data,
+                }
+            })
+        if quality_check and quality_check.defect_status == "error":
+            raise serializers.ValidationError({
+                "serial_number": {
+                    "code": "QC_FAILED",
+                    "message": "Produkt neprešiel kontrolou kvality (chybný kus).",
+                    "serial_number": instance.serial_number,
+                    "product": {
+                        "id": instance.product.id,
+                        "name": instance.product.product_name,
+                    },
+                    "quality_check": qc_data,
+                }
+            })
+
+        # 4️⃣ už bol expedovaný
+        if instance.status == "shipped":
+            raise serializers.ValidationError({
+                "serial_number": {
+                    "code": "ALREADY_SHIPPED",
+                    "message": "Produkt už bol expedovaný a nie je možné ho znovu použiť.",
+                    "serial_number": instance.serial_number,
+                    "product": {
+                        "id": instance.product.id,
+                        "name": instance.product.product_name,
+                    },
+                }
+            })
+
+        # 5️⃣ ešte neprešiel kontrolou
+        if instance.status != "inspected":
+            raise serializers.ValidationError({
+                "serial_number": {
+                    "code": "NOT_INSPECTED",
+                    "message": "Produkt ešte neprešiel kontrolou kvality.",
+                    "serial_number": instance.serial_number,
+                    "product": {
+                        "id": instance.product.id,
+                        "name": instance.product.product_name,
+                    },
+                    "quality_check": qc_data,
+                }
+            })
+
+        # 4️⃣ už nie je v expedícii?
+        if hasattr(instance, "expedition_item"):
+            raise serializers.ValidationError({
+                "serial_number": {
+                    "code": "ALREADY_USED",
+                    "message": "Tento kus je už v inej expedícii.",
+                    "serial_number": instance.serial_number,
+                }
+            })
+
+        data["product_instance"] = instance
+        return data
+
+
+class OrderItemStatusSerializer(serializers.Serializer):
+    order_item_id = serializers.IntegerField()
+    product_name = serializers.CharField()
+    total_ordered = serializers.IntegerField()
+    total_issued = serializers.IntegerField()
+    remaining_qty = serializers.IntegerField()
+
+    def get_order_items_status(order):
+        """
+        Vráti stav všetkých položiek objednávky:
+        koľko je objednané, vydané a koľko zostáva.
+        """
+        status_list = []
+
+        for item in order.items.all():
+            total_issued = ExpeditionItem.objects.filter(order_item=item).aggregate(
+                total=Sum('quantity')
+            )['total'] or 0
+
+            remaining_qty = item.quantity - total_issued
+
+            status_list.append({
+                'order_item_id': item.id,
+                'product_name': item.product.product_name,
+                'total_ordered': item.quantity,
+                'total_issued': total_issued,
+                'remaining_qty': remaining_qty
+            })
+
+        serializer = OrderItemStatusSerializer(status_list, many=True)
+        return serializer.data
 
