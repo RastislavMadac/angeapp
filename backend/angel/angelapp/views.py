@@ -946,12 +946,12 @@ class StockIssueViewSet(ModelViewSet):
             return Response({"detail": "Objednávka je už kompletne vybavená."}, status=400)
 
         # =============================
-        # 1️⃣ Validácia všetkých položiek vrátane serializovaných kusov
+        # 1️⃣ Validácia všetkých položiek
         # =============================
         validated_items = []
         for row in items_data:
             order_item_id = row.get("order_item_id")
-            qty = Decimal(row.get("quantity", 0))
+            qty = Decimal(str(row.get("quantity", 0)))
 
             if not order_item_id or qty <= 0:
                 return Response({"detail": "order_item_id a quantity sú povinné a >0"}, status=400)
@@ -961,47 +961,51 @@ class StockIssueViewSet(ModelViewSet):
             except OrderItem.DoesNotExist:
                 return Response({"detail": f"Položka objednávky {order_item_id} neexistuje"}, status=400)
 
+            product = order_item.product
+
+            # Kontrola dostupnosti na objednávke
             remaining_qty = order_item.quantity - order_item.issued_quantity()
             if qty > remaining_qty:
-                return Response({"detail": f"Presahuješ dostupné množstvo pre {order_item.product.product_name}, zostáva {remaining_qty} ks"}, status=400)
+                return Response({"detail": f"Presahuješ dostupné množstvo pre {product.product_name}, zostáva {remaining_qty} ks"}, status=400)
 
-            available_qty = order_item.product.total_quantity - order_item.product.reserved_quantity
+            # Kontrola reálnych zásob na sklade (celkové množstvo)
+            available_qty = product.total_quantity - product.reserved_quantity
             if qty > available_qty:
-                return Response({"detail": f"Nedostatok produktu {order_item.product.product_name}, dostupných len {available_qty} ks"}, status=400)
+                return Response({"detail": f"Nedostatok produktu {product.product_name}, dostupných len {available_qty} ks"}, status=400)
 
-            # ✅ Validácia serializovaných kusov
+            # --- LOGIKA PRE SERIALIZOVANÉ KUSY ---
             instances = []
-            requested_instance_ids = row.get("instance_ids", [])
-            requested_serials = row.get("serial_numbers", [])
+            # POZNÁMKA: Ak tvoj model nemá pole 'is_serialized', nahraď ho podmienkou, 
+            # podľa ktorej spoznáš, že produkt vyžaduje S/N (napr. product.product_type.requires_serial)
+            is_serialized = getattr(product, 'is_serialized', False)
 
-            if requested_instance_ids:
-                instances_qs = ProductInstance.objects.filter(
-                    id__in=requested_instance_ids,
-                    product=order_item.product
-                )
-                if instances_qs.count() != qty:
-                    return Response({"detail": f"Nedostatok alebo nesprávne serializované kusy pre {order_item.product.product_name}"}, status=400)
-                instances = list(instances_qs)
+            if is_serialized:
+                requested_instance_ids = row.get("instance_ids", [])
+                requested_serials = row.get("serial_numbers", [])
 
-            elif requested_serials:
-                instances_qs = ProductInstance.objects.filter(
-                    serial_number__in=requested_serials,
-                    product=order_item.product
-                )
-                if instances_qs.count() != qty:
-                    return Response({"detail": f"Nedostatok alebo nesprávne serializované kusy pre {order_item.product.product_name}"}, status=400)
-                instances = list(instances_qs)
+                if requested_instance_ids:
+                    instances_qs = ProductInstance.objects.filter(id__in=requested_instance_ids, product=product)
+                    if instances_qs.count() != qty:
+                        return Response({"detail": f"Nedostatok alebo nesprávne serializované kusy (ID) pre {product.product_name}"}, status=400)
+                    instances = list(instances_qs)
 
-            else:
-                # fallback na automatický výber podľa statusu
-                instances = list(order_item.product.instances.filter(status="manufactured")[:int(qty)])
-                if len(instances) < qty:
-                    return Response({"detail": f"Nedostatok serializovaných kusov pre {order_item.product.product_name}"}, status=400)
+                elif requested_serials:
+                    instances_qs = ProductInstance.objects.filter(serial_number__in=requested_serials, product=product)
+                    if instances_qs.count() != qty:
+                        return Response({"detail": f"Nedostatok alebo nesprávne sériové čísla pre {product.product_name}"}, status=400)
+                    instances = list(instances_qs)
 
+                else:
+                    # Automatický výber inštancií (fallback) - len pre serializované produkty
+                    instances = list(product.instances.filter(status="manufactured")[:int(qty)])
+                    if len(instances) < qty:
+                        return Response({"detail": f"Nedostatok serializovaných kusov (S/N) v sklade pre {product.product_name}"}, status=400)
+
+            # Uložíme si overené dáta (vrátane prázdneho zoznamu inštancií pre neserializovaný tovar)
             validated_items.append((order_item, qty, instances))
 
         # =============================
-        # 2️⃣ Vytvorenie StockIssue až po úspešnej validácii
+        # 2️⃣ Vytvorenie StockIssue (Výdajky)
         # =============================
         stock_issue = StockIssue.objects.create(
             order=order,
@@ -1010,19 +1014,19 @@ class StockIssueViewSet(ModelViewSet):
         )
 
         # =============================
-        # 3️⃣ Spracovanie všetkých položiek
+        # 3️⃣ Spracovanie a zápis do DB
         # =============================
         for order_item, qty, instances in validated_items:
             product = order_item.product
 
-            # 🟡 Výrobok → spracovanie surovín
+            # 🟡 Ak je to vyrobený produkt, spracujeme suroviny
             if product.product_type.code == "MANUFACTURED":
                 StockIssueService.issue_ingredients_for_product(product, qty)
 
-            # 🟢 Výdaj produktu zo skladu
+            # 🟢 Reálne zníženie stavu zásob (univerzálna funkcia)
             issue_product(product, qty)
 
-            # 📦 Položka výdajky
+            # 📦 Vytvorenie položky výdajky
             issue_item = StockIssueItem.objects.create(
                 stock_issue=stock_issue,
                 product=product,
@@ -1030,14 +1034,15 @@ class StockIssueViewSet(ModelViewSet):
                 order_item=order_item
             )
 
-            # 🔹 Priradenie serializovaných kusov
-            for inst in instances:
-                issue_item.instances.create(product_instance=inst)
-                inst.status = "shipped"
-                inst.save(update_fields=["status"])
+            # 🔹 Priradenie konkrétnych kusov (ak sú serializované)
+            if instances:
+                for inst in instances:
+                    issue_item.instances.create(product_instance=inst)
+                    inst.status = "shipped"
+                    inst.save(update_fields=["status"])
 
             # 🔄 Aktualizácia stavu položky objednávky
-            total_issued = order_item.issued_quantity() + qty
+            total_issued = order_item.issued_quantity() # Toto by malo vrátiť už novú hodnotu po issue_product
             if total_issued >= order_item.quantity:
                 order_item.status = "completed"
             elif total_issued > 0:
@@ -1047,8 +1052,11 @@ class StockIssueViewSet(ModelViewSet):
             order_item.save(update_fields=["status"])
 
         # 🔄 Aktualizácia stavu celej objednávky
-        total_issued_all = sum(item.issued_quantity() for item in order.items.all())
-        total_order_quantity = sum(item.quantity for item in order.items.all())
+        # Refreshnutie objednávky z DB pre istotu kvôli prepočtom
+        order.refresh_from_db()
+        all_items = order.items.all()
+        total_issued_all = sum(item.issued_quantity() for item in all_items)
+        total_order_quantity = sum(item.quantity for item in all_items)
 
         if total_issued_all == 0:
             order.status = "pending"
@@ -1061,7 +1069,6 @@ class StockIssueViewSet(ModelViewSet):
 
         serializer = self.get_serializer(stock_issue)
         return Response(serializer.data, status=201)
-
     # ❌ Zakázanie aktualizácie / partial_update
     def partial_update(self, request, *args, **kwargs):
         raise MethodNotAllowed(
@@ -1127,7 +1134,22 @@ class ExpeditionViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
 
-    
+    # -----------------------
+    # Kontrola skladu (len upozornenie)
+    # -----------------------
+    def check_stock_availability(self, order):
+        warnings = []
+        for item in order.items.all():
+            product = item.product
+            available_qty = product.free_quantity
+            if available_qty < item.quantity:
+                warnings.append({
+                    "order_item_id": item.id,
+                    "product_name": product.product_name,
+                    "required_qty": item.quantity,
+                    "available_qty": available_qty
+                })
+        return warnings
 
     @action(detail=True, methods=["post"])
     def close(self, request, pk=None):
@@ -1205,60 +1227,80 @@ class ExpeditionViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         order_id = request.data.get("order")
+        if not order_id:
+            return Response({"detail": "order_id je povinné"}, status=status.HTTP_400_BAD_REQUEST)
 
-        if order_id:
-            existing = Expedition.objects.filter(
-                order_id=order_id
-            ).exclude(
-                status=Expedition.STATUS_SHIPPED
-            ).first()
+        order = get_object_or_404(Order, id=order_id)
 
-            if existing:
-                # 🔥 DOPLNÍME CHÝBAJÚCE RIADKY
-                if not existing.items.exists():
-                    serializer = self.get_serializer()
-                    serializer.create_items_for_expedition(existing)
+        # Skontrolujeme existujúcu expedíciu, ktorá ešte nie je SHIPPED
+        existing = Expedition.objects.filter(order_id=order_id).exclude(status=Expedition.STATUS_SHIPPED).first()
+        if existing:
+            if not existing.items.exists():
+                serializer = self.get_serializer()
+                serializer.create_items_for_expedition(existing)
 
-                return Response(
-                    self.get_serializer(existing).data,
-                    status=status.HTTP_200_OK
-                )
+            # 🔹 kontrola skladu (len upozornenie)
+            stock_warnings = self.check_stock_availability(existing.order)
+            response_data = self.get_serializer(existing).data
+            if stock_warnings:
+                response_data['stock_warnings'] = stock_warnings
 
+            return Response(response_data, status=status.HTTP_200_OK)
+
+        # 🔹 vytvorenie novej expedície
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         expedition = serializer.save(created_by=request.user)
 
-        # 🔥 HNEĎ PO VYTVORENÍ
+        # 🔥 HNEĎ PO VYTVORENÍ – vytvorenie položiek
         serializer.create_items_for_expedition(expedition)
 
-        return Response(
-            self.get_serializer(expedition).data,
-            status=status.HTTP_201_CREATED
-        )
+        # 🔹 kontrola skladu (len upozornenie)
+        stock_warnings = self.check_stock_availability(expedition.order)
+        response_data = self.get_serializer(expedition).data
+        if stock_warnings:
+            response_data['stock_warnings'] = stock_warnings
 
+        return Response(response_data, status=status.HTTP_201_CREATED)
 
+    @transaction.atomic
     def update(self, request, *args, **kwargs):
+        """
+        Sledujeme zmenu statusu. 
+        Ak príde 'ready', vytvoríme výdajku a expedíciu uzavrieme.
+        """
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
 
         old_status = instance.status
-        print(f"[DEBUG] OLD status: {old_status}, NEW data: {request.data}")
+        new_status = request.data.get("status", old_status)
 
-        # Upravíme serializer bez toho, aby sme hneď menili status na 'shipped'
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
-        expedition = serializer.save()  # status je stále 'ready'
-        print(f"[DEBUG] Expedícia uložená – ID: {expedition.id}, status: {expedition.status}")
+        expedition = serializer.save()
 
-        new_status = request.data.get("status")
-        if old_status != Expedition.STATUS_READY and new_status == Expedition.STATUS_READY:
-            print("[DEBUG] Zavoláme close() a vytvoríme StockIssue")
-            expedition.close()  # tu sa status prepíše na 'shipped'
-            stock_issue = StockIssueService.create_from_expedition(expedition)
-            print(f"[DEBUG] StockIssue vytvorená – ID: {getattr(stock_issue, 'id', None)}")
+        # 🔥 Ak sa status zmenil z DRAFT → READY, spravíme výdajku
+        if old_status == Expedition.STATUS_DRAFT and new_status == Expedition.STATUS_READY:
+            print(f"[DEBUG] Expedícia {expedition.id}: DRAFT → READY → Odpis zo skladu")
+
+            try:
+                # Vytvoríme výdajku a odpíšeme sklad
+                StockIssueService.create_from_expedition(expedition)
+
+                # Po úspešnom odpise uzavrieme expedíciu (status → SHIPPED)
+                expedition.close()
+
+                # Obnovíme dáta pre odpoveď
+                expedition.refresh_from_db()
+
+            except ValueError as e:
+                # Nedostatok skladu → rollback a vrátime chybu
+                return Response(
+                    {"detail": str(e)},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
         return Response(self.get_serializer(expedition).data)
-
 
     @action(detail=True, methods=['delete'], url_path='delete-item/(?P<item_id>[^/.]+)')
     def delete_item(self, request, pk=None, item_id=None):
@@ -1269,6 +1311,16 @@ class ExpeditionViewSet(viewsets.ModelViewSet):
             return Response({"detail": f"Item {item_id} vymazaný"}, status=status.HTTP_204_NO_CONTENT)
         except ExpeditionItem.DoesNotExist:
             return Response({"detail": "Item neexistuje"}, status=status.HTTP_404_NOT_FOUND)
+
+    @action(detail=True, methods=['post'])
+    def storno(self, request, pk=None):
+        stock_issue = self.get_object()
+        try:
+            StockIssueService.storno_issue(stock_issue)
+            return Response({"detail": "Výdajka bola úspešne stornovaná."}, status=status.HTTP_200_OK)
+        except ValueError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
 # -----------------------
 # ItemQualityCheckViewSet
 # -----------------------

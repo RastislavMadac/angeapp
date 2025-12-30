@@ -1366,6 +1366,8 @@ class ExpeditionItemSerializer(serializers.ModelSerializer):
 # ----------------------- 
 
 class ExpeditionSerializer(serializers.ModelSerializer):
+    stock_warnings = serializers.ListField(child=serializers.DictField(), read_only=True)
+
     items = ExpeditionItemSerializer(many=True, required=False)
     prepared_items = serializers.SerializerMethodField()
     order_number = serializers.CharField(
@@ -1383,6 +1385,7 @@ class ExpeditionSerializer(serializers.ModelSerializer):
             "items",
             "prepared_items",
             "stock_issue",
+            "stock_warnings"
         ]
         read_only_fields = ["stock_issue", "closed_at"]
 
@@ -1420,31 +1423,33 @@ class ExpeditionSerializer(serializers.ModelSerializer):
         order = expedition.order
 
         for order_item in order.items.all():
-            product_type = getattr(order_item.product, 'product_type', None)
+            product = order_item.product
+            product_type = getattr(product, 'product_type', None)
             code = (getattr(product_type, 'code', '') or '').upper()
 
-            if code == 'MANUFACTURED':
-                # pre serializované produkty: 1 riadok = 1 kus
+            if code == 'MANUFACTURED' and product.is_serialized:
+                # pre serializované produkty: vytvor ExpeditionItem bez priradeného serialu
                 existing_count = ExpeditionItem.objects.filter(
+                    expedition=expedition,
+                    order_item=order_item
+                ).count()
+                remaining_qty = order_item.quantity - existing_count
+
+                for _ in range(remaining_qty):
+                    ExpeditionItem.objects.create(
+                        expedition=expedition,
+                        order_item=order_item,
+                        product_instance=None,  # serial sa ešte nepriraďuje
+                        unit_price=order_item.price,
+                        quantity=1
+                    )
+
+            else:
+                # pre neseializované produkty: všetky zostávajúce kusy v jednom riadku
+                existing_sum = ExpeditionItem.objects.filter(
                     expedition=expedition,
                     order_item=order_item,
                     product_instance__isnull=True
-                ).count()
-                remaining_qty = order_item.quantity - existing_count
-                if remaining_qty > 0:
-                    for _ in range(remaining_qty):
-                        ExpeditionItem.objects.create(
-                            expedition=expedition,
-                            order_item=order_item,
-                            product_instance=None,
-                            unit_price=order_item.price
-                        )
-            else:
-                # pre neseializované produkty: 1 riadok = všetky zostávajúce ks
-                existing_sum = ExpeditionItem.objects.filter(
-                expedition=expedition,
-                order_item=order_item,
-                product_instance__isnull=True
                 ).aggregate(total=Sum('quantity'))['total'] or 0
                 remaining_qty = order_item.quantity - existing_sum
                 if remaining_qty > 0:
@@ -1453,8 +1458,9 @@ class ExpeditionSerializer(serializers.ModelSerializer):
                         order_item=order_item,
                         product_instance=None,
                         unit_price=order_item.price,
-                        quantity=remaining_qty  # všetky zostávajúce kusy
+                        quantity=remaining_qty
                     )
+
 
     # -----------------------
     # Create
@@ -1462,61 +1468,68 @@ class ExpeditionSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         expedition = Expedition.objects.create(**validated_data)
         self.create_items_for_expedition(expedition)
-        return expedition
 
+        # # Tu treba zavolať StockIssueService
+        # StockIssueService.create_from_expedition(expedition)
+
+        return expedition
     # -----------------------
     # Update
     # -----------------------
     def update(self, instance, validated_data):
+        # 1. Vytiahneme položky a status
         items_data = validated_data.pop('items', [])
-
-        # Odstránime status, aby sa neuložil predčasne
         new_status = validated_data.pop('status', None)
-        print(f"[DEBUG] OLD status: {instance.status}, NEW status: {new_status}, validated_data: {validated_data}")
+        
+        # Príprava na sledovanie zmeny stavu
+        should_create_stock_issue = False
+        if new_status == Expedition.STATUS_READY and instance.status != Expedition.STATUS_READY:
+            should_create_stock_issue = True
 
-        # Aktualizujeme základné polia expedície
+        # 2. Aktualizujeme základné polia expedície (okrem statusu)
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
-        print(f"[DEBUG] Expedícia uložená – ID: {instance.id}, status: {instance.status}")
 
-        # 🔥 Ak sa mení status na READY, zavoláme close()
-        if new_status == Expedition.STATUS_READY and instance.status != Expedition.STATUS_SHIPPED:
-            print("[DEBUG] Zavoláme close()")
-            instance.close()
-            print(f"[DEBUG] Po close() – status: {instance.status}, closed_at: {instance.closed_at}")
-
-            # 2️⃣ Vytvoríme StockIssue cez službu
-            print("[DEBUG] Voláme StockIssueService.create_from_expedition()")
-            stock_issue = StockIssueService.create_from_expedition(instance)
-            print(f"[DEBUG] StockIssue vytvorená – ID: {getattr(stock_issue, 'id', None)}")
-
-        # Mapujeme existujúce položky
+        # 3. AKTUALIZÁCIA POLOŽIEK (Items) - Musí prebehnúť PRED výdajkou
         existing_items = {item.id: item for item in instance.items.all()}
 
         for item_data in items_data:
             item_id = item_data.get('id')
-            if not item_id:
-                raise serializers.ValidationError("ID položky je povinné pre update.")
-
             item = existing_items.get(item_id)
-            if not item:
-                raise serializers.ValidationError(f"Položka s ID {item_id} neexistuje v tejto expedícii.")
+            
+            if item:
+                # OCHRANA SÉRIOVÝCH ČÍSIEL: 
+                # Ak v DB už SN máme, ale z frontendu prišlo null, ignorujeme to (neprepisujeme na null)
+                incoming_sn = item_data.get('product_instance')
+                
+                # Úprava množstva (len pre neserializované)
+                if not getattr(item.order_item.product, 'is_serialized', False):
+                    item.quantity = item_data.get('quantity', item.quantity)
 
-            # Úprava množstva (len pre neserializované produkty)
-            if not getattr(item.order_item.product, 'is_serialized', False):
-                new_qty = item_data.get('quantity', item.quantity)
-                item.quantity = new_qty
+                # Aktualizujeme ostatné polia
+                for attr, value in item_data.items():
+                    if attr not in ('id', 'order_item', 'quantity', 'product_instance'):
+                        setattr(item, attr, value)
+                    
+                    # SN zapíšeme len vtedy, ak nie je null (aby sme nevymazali existujúce)
+                    if attr == 'product_instance' and value is not None:
+                        setattr(item, attr, value)
 
-            # Aktualizujeme ostatné polia okrem 'id', 'order_item', 'quantity'
-            for attr, value in item_data.items():
-                if attr not in ('id', 'order_item', 'quantity'):
-                    setattr(item, attr, value)
+                item.save()
 
-            item.save()
+        # 4. LOGIKA PRE READY (Voláme až po uložení všetkých položiek)
+        if should_create_stock_issue:
+            # Refreshneme inštanciu, aby mala aktuálne položky z DB
+            instance.refresh_from_db()
+            
+            print(f"[DEBUG] Prechádzam do READY. Volám close() pre expedíciu {instance.id}")
+            instance.close() # Tu sa zmení status na READY/SHIPPED
+            
+            print("[DEBUG] Volám StockIssueService.create_from_expedition()")
+            StockIssueService.create_from_expedition(instance)
 
         return instance
-
 # -----------------------
  #AssignSerialSerializer
 # ----------------------- 

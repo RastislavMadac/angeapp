@@ -140,3 +140,16 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 AUTH_USER_MODEL = 'angelapp.User'
+
+# --- Celery ---
+CELERY_BROKER_URL = "redis://localhost:6379/0"  # alebo "amqp://guest:guest@localhost:5672//" pre RabbitMQ
+CELERY_RESULT_BACKEND = "redis://localhost:6379/0"
+
+# Na dev server, tasky sa spustia hneď (bez brokera)
+CELERY_TASK_ALWAYS_EAGER = True
+CELERY_TASK_EAGER_PROPAGATES = True
+
+CELERY_BROKER_URL = "memory://"
+CELERY_RESULT_BACKEND = "cache+memory://"
+CELERY_TASK_ALWAYS_EAGER = True
+CELERY_TASK_EAGER_PROPAGATES = True

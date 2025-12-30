@@ -1,0 +1,22 @@
+{
+	"id": "58c25c20-5184-4349-bb8e-ff471e48af91",
+	"name": "New Environment",
+	"values": [
+		{
+			"key": "baseUrl",
+			"value": "http://127.0.0.1:8000/api/",
+			"type": "default",
+			"enabled": true
+		},
+		{
+			"key": "TokenAdmin",
+			"value": "Token efa17bbae8c973584f26ae08e63c73af2a69829c",
+			"type": "default",
+			"enabled": true
+		}
+	],
+	"color": null,
+	"_postman_variable_scope": "environment",
+	"_postman_exported_at": "2025-12-27T18:37:08.440Z",
+	"_postman_exported_using": "Postman/11.77.2"
+}

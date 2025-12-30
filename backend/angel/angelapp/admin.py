@@ -301,3 +301,56 @@ class ExpeditionAdmin(admin.ModelAdmin):
     def order_number(self, obj):
         return obj.order.order_number
     order_number.admin_order_field = 'order__order_number'
+
+
+from django.contrib import admin
+from .models import ItemQualityCheck
+
+@admin.register(ItemQualityCheck)
+class ItemQualityCheckAdmin(admin.ModelAdmin):
+    list_display = (
+        "product_instance",
+        "manufactured_by",
+        "manufacture_date",
+        "visual_check",
+        "packaging_check",
+        "defect_status",
+        "checked_by",
+        "checked_at",
+        "approved_for_shipping",
+    )
+    list_filter = (
+        "defect_status",
+        "approved_for_shipping",
+        "visual_check",
+        "packaging_check",
+        "manufacture_date",
+        "checked_at",
+    )
+    search_fields = (
+        "product_instance__serial_number",  # predpokladám, že ProductInstance má serial_number
+        "defect_description",
+        "manufactured_by__username",
+        "checked_by__username",
+    )
+    readonly_fields = ("checked_at", "created_at", "updated_at")
+    fieldsets = (
+        ("Produkt / Kontrola", {
+            "fields": ("product_instance", "manufactured_by", "manufacture_date")
+        }),
+        ("Typy kontroly", {
+            "fields": ("visual_check", "packaging_check")
+        }),
+        ("Chybovosť", {
+            "fields": ("defect_status", "defect_description")
+        }),
+        ("Kontrola", {
+            "fields": ("checked_by", "checked_at")
+        }),
+        ("Expedícia", {
+            "fields": ("approved_for_shipping",)
+        }),
+        ("Meta", {
+            "fields": ("created_at", "updated_at")
+        }),
+    )

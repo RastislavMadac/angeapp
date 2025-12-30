@@ -1,0 +1,312 @@
+{
+	"info": {
+		"_postman_id": "fe654b97-9039-477a-be63-370dcd1c2c38",
+		"name": "Expedition",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "31259904",
+		"_collection_link": "https://worktrack-3038.postman.co/workspace/angeltest~f3e29613-34df-4d99-b869-fcfdb4d83fed/collection/31259904-fe654b97-9039-477a-be63-370dcd1c2c38?action=share&source=collection_link&creator=31259904"
+	},
+	"item": [
+		{
+			"name": "Expedition",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"var template = `",
+							"<canvas id=\"expeditionChart\" height=\"100\"></canvas>",
+							"<script src=\"https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.5.0/Chart.min.js\"></script>",
+							"<script>",
+							"    var ctx = document.getElementById(\"expeditionChart\");",
+							"    var expeditionChart = new Chart(ctx, {",
+							"        type: \"bar\",",
+							"        data: {",
+							"            labels: [],",
+							"            datasets: [",
+							"                {",
+							"                    label: \"Items Count\",",
+							"                    backgroundColor: \"rgba(54, 162, 235, 0.7)\",",
+							"                    borderColor: \"rgba(54, 162, 235, 1)\",",
+							"                    borderWidth: 1,",
+							"                    data: []",
+							"                },",
+							"                {",
+							"                    label: \"Prepared Items Count\",",
+							"                    backgroundColor: \"rgba(255, 99, 132, 0.7)\",",
+							"                    borderColor: \"rgba(255, 99, 132, 1)\",",
+							"                    borderWidth: 1,",
+							"                    data: []",
+							"                }",
+							"            ]",
+							"        },",
+							"        options: {",
+							"            legend: { display: true },",
+							"            title: {",
+							"                display: true,",
+							"                text: \"Expedition Items vs Prepared Items\"",
+							"            },",
+							"            scales: {",
+							"                xAxes: [{",
+							"                    display: true,",
+							"                    scaleLabel: {",
+							"                        display: true,",
+							"                        labelString: \"Order Number\"",
+							"                    }",
+							"                }],",
+							"                yAxes: [{",
+							"                    display: true,",
+							"                    scaleLabel: {",
+							"                        display: true,",
+							"                        labelString: \"Count\"",
+							"                    },",
+							"                    ticks: {",
+							"                        beginAtZero: true",
+							"                    }",
+							"                }]",
+							"            }",
+							"        }",
+							"    });",
+							"",
+							"    pm.getData(function (err, value) {",
+							"        expeditionChart.data.labels = value.labels;",
+							"        expeditionChart.data.datasets[0].data = value.itemsCounts;",
+							"        expeditionChart.data.datasets[1].data = value.preparedItemsCounts;",
+							"        expeditionChart.update();",
+							"    });",
+							"</script>",
+							"`;",
+							"",
+							"function constructVisualizerPayload() {",
+							"    var response = pm.response.json();",
+							"    var labels = response.map(function(expedition) {",
+							"        return expedition.order_number;",
+							"    });",
+							"    var itemsCounts = response.map(function(expedition) {",
+							"        return expedition.items ? expedition.items.length : 0;",
+							"    });",
+							"    var preparedItemsCounts = response.map(function(expedition) {",
+							"        return expedition.prepared_items ? expedition.prepared_items.length : 0;",
+							"    });",
+							"    ",
+							"    return {",
+							"        labels: labels,",
+							"        itemsCounts: itemsCounts,",
+							"        preparedItemsCounts: preparedItemsCounts",
+							"    };",
+							"}",
+							"",
+							"pm.visualizer.set(template, constructVisualizerPayload());"
+						],
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {}
+					}
+				}
+			],
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "{{TokenAdmin}}",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"order\": 59,\r\n  \"status\": \"draft\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{baseUrl}}expeditions/",
+					"host": [
+						"{{baseUrl}}expeditions"
+					],
+					"path": [
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "assign-serial",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "{{TokenAdmin}}",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"expedition\": 19,\r\n    \"order_item\": 287,\r\n    \"serial_number\": \"A25165325636\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{baseUrl}}expeditions/assign-serial/",
+					"host": [
+						"{{baseUrl}}expeditions"
+					],
+					"path": [
+						"assign-serial",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "deletItem",
+			"request": {
+				"method": "DELETE",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "{{TokenAdmin}}",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n  \"order\": 58,\r\n  \"status\": \"draft\",\r\n  \"items\": [\r\n    {\r\n      \"id\": 27,\r\n      \"order_item\": 297,\r\n      \"product_instance\": null,\r\n      \"product_name\": \"Tablet Z10\",\r\n      \"unit_price\": \"0.00\",\r\n      \"stock_issue_item\": null\r\n    },\r\n    {\r\n      \"id\": 28,\r\n      \"order_item\": 297,\r\n      \"product_instance\": null,\r\n      \"product_name\": \"Tablet Z10\",\r\n      \"unit_price\": \"0.00\",\r\n      \"stock_issue_item\": null\r\n    }\r\n  ]\r\n}\r\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{baseUrl}}expeditions/37/delete-item/86/",
+					"host": [
+						"{{baseUrl}}expeditions"
+					],
+					"path": [
+						"37",
+						"delete-item",
+						"86",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "quantity",
+			"request": {
+				"method": "PATCH",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "{{TokenAdmin}}",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"items\": [\r\n        {\r\n            \"id\": 91,\r\n            \"order_item\": 300,\r\n            \"quantity\": 1\r\n        }\r\n    ]\r\n}\r\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{baseUrl}}expeditions/38/",
+					"host": [
+						"{{baseUrl}}expeditions"
+					],
+					"path": [
+						"38",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "usedItems",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "{{TokenAdmin}}",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "{{baseUrl}}expeditions/38/items_status/",
+					"host": [
+						"{{baseUrl}}expeditions"
+					],
+					"path": [
+						"38",
+						"items_status",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "New Request",
+			"request": {
+				"method": "GET",
+				"header": []
+			},
+			"response": []
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "",
+				"type": "string"
+			}
+		]
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"requests": {},
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"requests": {},
+				"exec": [
+					""
+				]
+			}
+		}
+	]
+}

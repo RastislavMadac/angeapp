@@ -266,34 +266,36 @@ class Company(models.Model):
                f"{self.delivery_city or self.city}, " \
                f"{self.delivery_postal_code or self.postal_code}"
 
-#-----------------------
-# order
-#-----------------------
 
+
+# -----------------------
+# Order
+# -----------------------
 class Order(models.Model):
-    order_number = models.CharField(max_length=20, blank=True, null=True)  # nové pole
-    customer = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="orders")
-    created_at = models.DateTimeField(default=timezone.now)
-    created_who=models.ForeignKey(User,on_delete=models.CASCADE, related_name="whoCreated")
-    edited_at = models.DateTimeField(default=timezone.now)
-    edited_who=models.ForeignKey(User,on_delete=models.CASCADE, related_name="whoEdited")
-    status = models.CharField(
-        max_length=20,
-        choices=[
-            ("pending", "Čaká sa"),
-            ("processing", "Spracováva sa"),
-            ("partially completed", "Čiastocne prenesená"),
-            ("completed", "Dokončená"),
-            ("canceled", "Zrušená"),
-        ],
-        default="pending",
-    )
+    STATUS_PENDING = "pending"
+    STATUS_PROCESSING = "processing"
+    STATUS_PARTIAL = "partially_completed"
+    STATUS_COMPLETED = "completed"
+    STATUS_CANCELED = "canceled"
 
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Čaká sa"),
+        (STATUS_PROCESSING, "Spracováva sa"),
+        (STATUS_PARTIAL, "Čiastocne prenesená"),
+        (STATUS_COMPLETED, "Dokončená"),
+        (STATUS_CANCELED, "Zrušená"),
+    ]
+
+    order_number = models.CharField(max_length=20, blank=True, null=True, unique=True)
+    customer = models.ForeignKey("Company", on_delete=models.CASCADE, related_name="orders")
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_who = models.ForeignKey("User", on_delete=models.CASCADE, related_name="who_created")
+    edited_at = models.DateTimeField(auto_now=True)
+    edited_who = models.ForeignKey("User", on_delete=models.CASCADE, related_name="who_edited")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
     delivery_date = models.DateField(null=True, blank=True)
-    production_plan_items = models.ManyToManyField('ProductionPlanItem', blank=True)
+    production_plan_items = models.ManyToManyField("ProductionPlanItem", blank=True)
     note = models.TextField(blank=True, null=True)
-
-
 
     def __str__(self):
         return f"Objednávka #{self.id} - {self.customer.name}"
@@ -303,21 +305,13 @@ class Order(models.Model):
         return sum(item.total_price for item in self.items.all())
 
 
-#-----------------------
-# orderItem
-#-----------------------
+# -----------------------
+# OrderItem
+# -----------------------
 class OrderItem(models.Model):
-    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="items")
-    product = models.ForeignKey(Product, on_delete=models.PROTECT)
-    quantity = models.PositiveIntegerField(default=1)
-   
-    price = models.DecimalField(max_digits=10, decimal_places=2, default=0)  # cena v čase objednávky
-    is_expedited = models.BooleanField(default=False)
-
-    production_card = models.ForeignKey('ProductionCard', null=True, blank=True, on_delete=models.SET_NULL)
     STATUS_PENDING = "pending"
     STATUS_IN_PRODUCTION = "in_production"
-    STATUS_PARTIAL = "partially_completed"   # 🔥 rovnaká hodnota
+    STATUS_PARTIAL = "partially_completed"
     STATUS_COMPLETED = "completed"
     STATUS_CANCELED = "canceled"
 
@@ -329,31 +323,27 @@ class OrderItem(models.Model):
         (STATUS_CANCELED, "Zrušené"),
     ]
 
-    status = models.CharField(
-        max_length=30,
-        choices=STATUS_CHOICES,
-        default=STATUS_PENDING
-    )
-
-
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="items")
+    product = models.ForeignKey("Product", on_delete=models.PROTECT)
+    quantity = models.PositiveIntegerField(default=1)
+    price = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    is_expedited = models.BooleanField(default=False)
+    production_card = models.ForeignKey("ProductionCard", null=True, blank=True, on_delete=models.SET_NULL)
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default=STATUS_PENDING)
 
     def __str__(self):
         return f"{self.quantity} x {self.product.product_name}"
 
     @property
     def total_price(self):
-       return (self.quantity or 0) * (self.price or 0)
+        return (self.quantity or 0) * (self.price or 0)
+
+   
     def issued_quantity(self):
-        """
-        Vráti sumu množstva tohto produktu, ktoré už bolo vydané vo výdajkách.
-        Ignoruje stornované výdajky.
-        """
-        return (
-        self.stock_issue_items
-        .filter(stock_issue__is_storno=False)
-        .aggregate(total=models.Sum("quantity"))["total"]
-        or 0
-    )
+        from django.db.models import Sum
+        # Sčítame všetky StockIssueItem priradené k tejto položke objednávky
+        return self.stock_issue_items.aggregate(total=Sum('quantity'))['total'] or 0
+
     def remaining_quantity(self) -> int:
         """
         Vracia množstvo, ktoré ešte nebolo prenesené.
@@ -668,7 +658,13 @@ class StockIssueItem(models.Model):
         on_delete=models.CASCADE,
         related_name="items"
     )
-
+    expedition_item = models.ForeignKey(
+            'ExpeditionItem', 
+            on_delete=models.SET_NULL, 
+            null=True, 
+            blank=True,
+            related_name="stock_issue_items"
+        )
     product = models.ForeignKey(
         Product,
         on_delete=models.PROTECT
@@ -841,9 +837,6 @@ class Expedition(models.Model):
         return f"Expedícia #{self.id} - {self.order.order_number or self.order.id}"
 
     def close(self):
-        if self.status != self.STATUS_READY:
-            raise ValidationError("Expedícia musí byť vo stave 'ready' pred uzavretím.")
-
         self.status = self.STATUS_SHIPPED
         self.closed_at = timezone.now()
         self.save(update_fields=["status", "closed_at"])
@@ -902,7 +895,8 @@ class ExpeditionItem(models.Model):
         if not self.product_instance:
          return
 
-        if self.product_instance.status != 'inspected':
+         # ak je produkt už expedovaný, ignorujeme kontrolu
+        if self.product_instance.status not in ['inspected', 'shipped']:
             raise ValidationError(
                 f"Produkt {self.product_instance.serial_number} neprešiel kontrolou."
             )
