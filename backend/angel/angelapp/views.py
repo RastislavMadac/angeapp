@@ -314,21 +314,27 @@ class OrderItemViewSet(viewsets.ModelViewSet):
 
 @api_view(['GET'])
 def get_product_by_code(request):
-    code = request.query_params.get('code')  # čítame parameter "code"
+    code = request.query_params.get('code', '').strip()
     if not code:
         return Response({"detail": "Missing code parameter"}, status=400)
     
-    try:
-        product = Product.objects.get(product_id=code)  # hľadáme podľa kódu produktu
-        return Response({
-            "id": product.id,                     # interné DB id
-            "name": product.product_name,                 # alebo product.product_name, podľa modelu
-            "product_id": product.product_id,     # kód produktu
-            "price": product.price_no_vat
-        })
-    except Product.DoesNotExist:
-        return Response({}, status=404)
+  
+    product = Product.objects.filter(
+        Q(product_id__iexact=code) | 
+        Q(ean_code__iexact=code) | 
+        Q(qr_code__iexact=code) 
+       
+    ).first()
 
+    if product:
+        return Response({
+            "id": product.id,
+            "name": product.product_name,
+            "product_id": product.product_id,
+            "price": getattr(product, 'price_no_vat', 0)
+        })
+    
+    return Response({"detail": "Product not found"}, status=404)
 
 # -----------------------
 # ProductionPlanViewSet
