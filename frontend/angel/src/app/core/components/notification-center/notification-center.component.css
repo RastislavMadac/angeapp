@@ -1,6 +1,12 @@
 /* =========================================
    1. TOAST NOTIFIKÁCIE (Pravý horný roh)
    ========================================= */
+.message {
+    flex-grow: 1;
+    white-space: pre-line;
+    /* Zabezpečí, že \n vytvorí nový riadok */
+    line-height: 1.4;
+}
 
 .toast-notification {
     position: fixed;

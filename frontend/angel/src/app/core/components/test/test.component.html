@@ -138,4 +138,115 @@
   
   
   
-  
+
+  <div class="dashboard">
+    <header>
+        <h1>Protokol kontroly #2024-001</h1>
+        <div style="text-align: right">
+            <strong>Dátum:</strong> 22.05.2024<br>
+            <strong>Linka:</strong> A2
+        </div>
+    </header>
+
+    <div class="inspection-grid">
+        
+        <div class="inspection-card">
+            <h2>1. Vizuálna kontrola</h2>
+            <div class="instruction-text">
+                <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
+                <ul>
+                    <li>Kontrola celistvosti povrchu.</li>
+                    <li>Overenie prítomnosti loga.</li>
+                    <li>Kontrola farebnej odchýlky (tolerancia Delta E < 2).</li>
+                </ul>
+            </div>
+            <div class="img-container" onclick="openLightbox(this)">
+                <img src="https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&q=80&w=800" alt="Vizuálna kontrola vzor">
+            </div>
+        </div>
+
+        <div class="inspection-card">
+            <h2>2. Balíková kontrola</h2>
+            <div class="instruction-text">
+                <p>Curabitur pretium tincidunt lacus. Nulla gravida orci a odio. Nullam varius, turpis et commodo pharetra, est eros bibendum elit, nec luctus magna felis sollicitudin mauris. Integer in mauris eu nibh euismod gravida.</p>
+                <ul>
+                    <li>Kontrola prítomnosti návodu a záručného listu.</li>
+                    <li>Overenie neporušenosti ochrannej plomby.</li>
+                    <li>Skenovanie EAN kódu na krabici.</li>
+                </ul>
+            </div>
+            <div class="img-container" onclick="openLightbox(this)">
+                <img src="https://images.unsplash.com/photo-1566576721346-d4a3b4eaeb55?auto=format&fit=crop&q=80&w=800" alt="Balíková kontrola vzor">
+            </div>
+        </div>
+
+    </div>
+
+    <h3>Záznam výsledkov</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Kontrolovaný parameter</th>
+                <th>Kategória</th>
+                <th>Výsledok</th>
+                <th>Poznámka technika</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Povrchová úprava</td>
+                <td>Vizuálna</td>
+                <td>
+                    <select class="status-select">
+                        <option>Vybrať...</option>
+                        <option style="color: green">Vyhovuje</option>
+                        <option style="color: red">Nevyhovuje</option>
+                    </select>
+                </td>
+                <td><input type="text" placeholder="Zadajte poznámku..."></td>
+            </tr>
+            <tr>
+                <td>Kompletnosť balenia</td>
+                <td>Balíková</td>
+                <td>
+                    <select class="status-select">
+                        <option>Vybrať...</option>
+                        <option>Vyhovuje</option>
+                        <option>Nevyhovuje</option>
+                    </select>
+                </td>
+                <td><input type="text" placeholder="Zadajte poznámku..."></td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="btn-group">
+        <button class="btn" style="background: #e2e8f0;">Zrušiť</button>
+        <button class="btn btn-save">Odoslať protokol</button>
+    </div>
+</div>
+
+<div id="lightbox" class="modal" onclick="closeLightbox()">
+    <span class="close">&times;</span>
+    <img id="lightbox-img" src="">
+</div>
+
+<script>
+    function openLightbox(element) {
+        const modal = document.getElementById("lightbox");
+        const modalImg = document.getElementById("lightbox-img");
+        const clickedImg = element.querySelector("img");
+        
+        modal.style.display = "flex";
+        modalImg.src = clickedImg.src;
+    }
+
+    function closeLightbox() {
+        document.getElementById("lightbox").style.display = "none";
+    }
+
+    // Zatvorenie klávesou Esc
+    document.addEventListener('keydown', (e) => {
+        if (e.key === "Escape") closeLightbox();
+    });
+</script>

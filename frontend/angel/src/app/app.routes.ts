@@ -86,6 +86,13 @@ export const routes: Routes = [
                     import('./core/components/production-card-plans/production-card-plans.component')
                         .then(m => m.ProductionCardPlansComponent),
             },
+            {
+                path: 'itemcheck',
+                canActivate: [roleGuard],
+                loadComponent: () =>
+                    import('./core/components/itemcheck/itemcheck.component')
+                        .then(m => m.ItemcheckComponent),
+            },
             { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
         ],
     },

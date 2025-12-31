@@ -1,0 +1,419 @@
+/* --- ZÁKLADNÝ RESET --- */
+* {
+    box-sizing: border-box;
+}
+
+/* --- HLAVNÝ LAYOUT --- */
+.qc-main-layout {
+    display: flex;
+    height: calc(100vh - 110px);
+    background: #f4f7f9;
+    overflow: hidden;
+    transition: all 0.3s ease-in-out;
+}
+
+/* REŽIM PREHĽAD (Stredový dokument) */
+.qc-main-layout.centered-mode {
+    justify-content: center;
+    background: #e5e7eb;
+}
+
+.qc-main-layout.centered-mode .qc-form-side {
+    flex: none;
+    width: 100%;
+    max-width: 750px;
+    margin: 20px;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+    border-right: none;
+}
+
+/* STRANY (Split layout pre Create) */
+.qc-form-side {
+    flex: 1.2;
+    padding: 30px;
+    overflow-y: auto;
+    background: white;
+    border-right: 1px solid #e2e8f0;
+}
+
+.qc-photos-side {
+    flex: 0.8;
+    padding: 30px;
+    background: #f8faff;
+    overflow-y: auto;
+}
+
+/* --- FORMULÁROVÉ PRVKY --- */
+.qc-container {
+    width: 100%;
+}
+
+.top-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 15px;
+}
+
+.qc-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 25px;
+    border-bottom: 2px solid #f0f2f5;
+    padding-bottom: 15px;
+}
+
+.qc-title h2 {
+    margin: 0;
+    color: #1a202c;
+    font-size: 1.4rem;
+}
+
+.qc-title span {
+    color: #64748b;
+    font-size: 0.9rem;
+}
+
+/* Status Badges */
+.status-badge {
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-weight: bold;
+    font-size: 0.8rem;
+    background: #10b981;
+    color: white;
+}
+
+.status-badge.badge-error {
+    background: #ef4444;
+}
+
+/* Create Mode Grid */
+.create-mode-box {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    background: #f8faff;
+    border: 1px dashed #cbd5e1;
+    padding: 15px;
+    border-radius: 10px;
+    margin-bottom: 25px;
+}
+
+.form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-bottom: 10px;
+}
+
+.form-field label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #475569;
+}
+
+/* Inputs */
+.qc-input,
+.qc-textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    outline: none;
+}
+
+.qc-input:focus,
+.qc-textarea:focus {
+    border-color: #3f51b5;
+    box-shadow: 0 0 0 3px rgba(63, 81, 181, 0.1);
+}
+
+.qc-input:disabled {
+    background: #f1f5f9;
+    color: #64748b;
+    cursor: not-allowed;
+}
+
+/* Input + Action Button */
+.input-with-action {
+    display: flex;
+    width: 100%;
+}
+
+.input-with-action .qc-input {
+    flex: 1;
+    border-radius: 8px 0 0 8px;
+    border-right: none;
+    min-width: 0;
+}
+
+.btn-dots {
+    background: #e2e8f0;
+    border: 1px solid #cbd5e1;
+    border-radius: 0 8px 8px 0;
+    padding: 0 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+}
+
+/* --- KARTY A STATUSY --- */
+.check-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.check-card {
+    padding: 20px;
+    border: 2px solid #e2e8f0;
+    /* Jemná šedá */
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    background: #ffffff;
+    color: #64748b;
+    /* Šedý text */
+    transition: all 0.2s ease;
+}
+
+.check-card.active-ok {
+    border-color: #10b981;
+    /* Zelený okraj */
+    background: #ecfdf5;
+    /* Jemne zelené pozadie */
+    color: #065f46;
+}
+
+.check-card.disabled-card {
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.check-card mat-icon {
+    font-size: 32px;
+    width: 32px;
+    height: 32px;
+}
+
+/* Ikona v neaktívnom stave */
+.check-card:not(.active-ok) mat-icon {
+    color: #cbd5e1;
+}
+
+.status-selector {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.status-label {
+    font-size: 0.8rem;
+    font-weight: 500;
+    text-transform: uppercase;
+}
+
+.status-btn {
+    flex: 1;
+    padding: 15px;
+    border-radius: 10px;
+    font-weight: bold;
+    font-size: 1rem;
+    cursor: pointer;
+    border: 2px solid #e2e8f0;
+    /* Neutrálna šedá */
+    background: #ffffff;
+    color: #64748b;
+    transition: all 0.2s ease;
+}
+
+.status-btn.ok.active {
+    background: #10b981;
+    color: white;
+    border-color: #059669;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+}
+
+.status-btn.error.active {
+    background: #ef4444;
+    color: white;
+    border-color: #b91c1c;
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
+}
+
+.status-btn:disabled {
+    cursor: not-allowed;
+}
+
+.error-text {
+    color: #ef4444;
+    font-size: 0.75rem;
+    margin-top: -15px;
+    margin-bottom: 15px;
+    display: block;
+}
+
+/* --- INFOPANEL A EXPEDÍCIA --- */
+.locked-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #fff4e5;
+    color: #663c00;
+    padding: 12px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    font-weight: 500;
+    border: 1px solid #ffe7c4;
+}
+
+.shipping-box {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #f8fafc;
+    padding: 12px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.btn-primary {
+    width: 100%;
+    padding: 15px;
+    background: #3f51b5;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+/* --- FOTKY --- */
+.photo-item.empty {
+    height: 200px;
+    border: 2px dashed #cbd5e1;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #94a3b8;
+}
+
+/* --- RESPONZIVITA --- */
+@media (max-width: 1100px) {
+    .qc-main-layout {
+        flex-direction: column;
+        height: auto;
+        overflow: visible;
+    }
+
+    .qc-form-side,
+    .qc-photos-side {
+        width: 100%;
+        flex: none;
+    }
+
+    .create-mode-box {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Box pre zobrazenie názvu produktu */
+.product-display-box {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 15px;
+    background-color: #f1f5f9;
+    /* Neutrálna sivá pre prázdny stav */
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    min-height: 42px;
+    font-weight: 600;
+    color: #64748b;
+    transition: all 0.3s ease;
+}
+
+/* Štýl pri úspešnom nájdení */
+.product-display-box.has-product {
+    background-color: #ecfdf5;
+    /* Jemná zelená */
+    border-color: #10b981;
+    color: #065f46;
+}
+
+.product-display-box mat-icon {
+    color: #10b981;
+    font-size: 20px;
+    width: 20px;
+    height: 20px;
+}
+
+.product-name-text {
+    flex: 1;
+}
+
+/* Kontajner pre input a ikonu */
+.input-with-action {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+/* Umiestnenie ikony do vnútra inputu napravo */
+.sn-status-icon {
+    position: absolute;
+    right: 12px;
+    display: flex;
+    align-items: center;
+    pointer-events: none;
+    /* Aby ikona neprekážala pri kliknutí */
+}
+
+/* Farby ikon */
+.text-success {
+    color: #10b981;
+}
+
+/* Zelená */
+.text-error {
+    color: #ef4444;
+}
+
+/* Červená */
+
+/* Špeciálne stavy okrajov inputu */
+.sn-ok {
+    border-color: #10b981 !important;
+    background-color: #f0fdf4 !important;
+}
+
+.sn-exists {
+    border-color: #ef4444 !important;
+    background-color: #fef2f2 !important;
+    color: #b91c1c !important;
+}
+
+/* Malá chybová hláška pod inputom */
+.error-msg-sn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: #ef4444;
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-top: 5px;
+}
+
+.error-msg-sn mat-icon {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+}
