@@ -18,27 +18,34 @@
 <ng-template #detailTpl>
   <div class="qc-main-layout" [class.centered-mode]="selectedItem?.id" *ngIf="inspectionForm">
     
-    <div class="qc-form-side">
+    <div class="qc-form-side" [class.is-locked]="isLocked">
       <div class="qc-container">
-        
+        <div class="controls-buttons">
         <div class="top-actions">
           <button mat-raised-button color="primary" (click)="createNewCheck()">
             <mat-icon>add</mat-icon> Nová kontrola
           </button>
         </div>
-
+        <div class="top-actions">
+          <button mat-raised-button color="primary" (click)="closeDetail()">
+            <mat-icon>close</mat-icon> Zavrieť kontrolu
+          </button>
+        </div>
+      </div>
         <header class="qc-header">
           <div class="qc-title">
-            <span *ngIf="selectedItem?.id">S/N: #{{ selectedItem?.instance_serial_number }}</span>
+            <span *ngIf="selectedItem?.id">Záznam ID: #{{ selectedItem?.id }}</span>
             <h2>{{ selectedItem?.id ? selectedItem?.product_name : 'Nová kontrola tovaru' }}</h2>
           </div>
-          <div class="status-badge" *ngIf="selectedItem?.id" [class.badge-error]="inspectionForm.get('defect_status')?.value === 'error'">
+          <div class="status-badge" *ngIf="selectedItem?.id" 
+               [class.badge-error]="inspectionForm.get('defect_status')?.value === 'error'">
             {{ inspectionForm.get('defect_status')?.value | uppercase }}
           </div>
         </header>
 
         <div class="locked-info" *ngIf="isLocked">
-          <mat-icon>lock</mat-icon> Táto kontrola je uzavretá a nie je možné ju editovať.
+          <mat-icon>lock</mat-icon> 
+          <span>Tento záznam je schválený a uzamknutý pre úpravy.</span>
         </div>
 
         <form [formGroup]="inspectionForm" (ngSubmit)="saveCheck()">
@@ -49,6 +56,7 @@
               <label>Skenovať kód (EAN / SKU) *</label>
               <div class="input-with-action">
                 <input type="text" 
+                       #productInput
                        class="qc-input" 
                        placeholder="Naskenujte kód produktu..." 
                        (input)="onProductCodeInput($event)">
@@ -62,14 +70,9 @@
             <div class="form-field">
               <label>Identifikovaný produkt</label>
               <input type="hidden" formControlName="product_id">
-          
               <div class="product-display-box" [class.has-product]="foundProductName && foundProductName !== 'Produkt nenájdený' && foundProductName !== 'Hľadám...'">
-                <mat-icon *ngIf="foundProductName && foundProductName !== 'Produkt nenájdený' && foundProductName !== 'Hľadám...'">
-                  check_circle
-                </mat-icon>
-                <span class="product-name-text">
-                  {{ foundProductName || 'Čakám na kód...' }}
-                </span>
+                <mat-icon *ngIf="foundProductName && foundProductName !== 'Produkt nenájdený' && foundProductName !== 'Hľadám...'">check_circle</mat-icon>
+                <span class="product-name-text">{{ foundProductName || 'Čakám na kód...' }}</span>
                 <mat-spinner *ngIf="foundProductName === 'Hľadám...'" diameter="20"></mat-spinner>
               </div>
             </div>
@@ -78,11 +81,12 @@
               <label>Sériové číslo kusu *</label>
               <div class="input-with-action">
                 <input type="text" 
+                       #serialInput
                        formControlName="serial_number" 
                        class="qc-input" 
                        [class.sn-exists]="isSnUnique === false"
                        [class.sn-ok]="isSnUnique === true"
-                       placeholder="Zadajte S/N kusu"
+                       placeholder="Naskenujte S/N kusu"
                        (input)="onSnInput($event)">
                 
                 <div class="sn-status-icon" *ngIf="isSnUnique !== null">
@@ -90,7 +94,6 @@
                   <mat-icon *ngIf="isSnUnique === false" class="text-error" matTooltip="Toto S/N už existuje!">cancel</mat-icon>
                 </div>
               </div>
-              
               <p class="error-msg-sn" *ngIf="isSnUnique === false">
                 <mat-icon>warning</mat-icon> Pozor: Tento kus už bol v minulosti skontrolovaný!
               </p>
@@ -98,41 +101,55 @@
 
             <div class="form-field">
               <label>Dátum výroby *</label>
-              <input type="date" formControlName="manufacture_date" class="qc-input">
+              <input type="date" 
+                     #dateInput
+                     formControlName="manufacture_date" 
+                     class="qc-input"
+                     (change)="focusOperator()"
+         (keyup.enter)="focusOperator()">
             </div>
 
             <div class="form-field">
               <label>Vyrobil (Technik) *</label>
-              <select formControlName="manufactured_by" class="qc-input">
-                <option [ngValue]="null" disabled>Vyberte...</option>
+              <select #operatorSelect 
+                      formControlName="manufactured_by" 
+                      class="qc-input"
+                      (change)="focusCard('visual')">
+                <option [ngValue]="null" disabled>Vyberte operátora...</option>
                 <option *ngFor="let user of users" [ngValue]="user.id">
                   {{ user.first_name }} {{ user.last_name }}
                 </option>
               </select>
             </div>
           </div> 
+
           <div class="check-grid">
             <div class="check-card" 
-                 [class.active-ok]="inspectionForm.get('visual_check')?.value === true"
-                 [class.not-checked]="inspectionForm.get('visual_check')?.value === false"
-                 (click)="isLocked ? null : inspectionForm.patchValue({visual_check: !inspectionForm.get('visual_check')?.value})">
+                 #visualCard
+                 tabindex="0"
+                 [class.active-ok]="inspectionForm.get('visual_check')?.value"
+                 (click)="isLocked ? null : toggleCheck('visual')"
+                 (keydown.space)="$event.preventDefault(); toggleCheck('visual')"
+                 (keydown.arrowRight)="focusCard('packaging')">
               
               <mat-icon>{{ inspectionForm.get('visual_check')?.value ? 'check_circle' : 'radio_button_unchecked' }}</mat-icon>
               <strong>Vizuálna kontrola</strong>
-              
               <span class="status-label">
                 {{ inspectionForm.get('visual_check')?.value ? 'Skontrolované' : 'Neskontrolované' }}
               </span>
             </div>
           
             <div class="check-card" 
-                 [class.active-ok]="inspectionForm.get('packaging_check')?.value === true"
-                 [class.not-checked]="inspectionForm.get('packaging_check')?.value === false"
-                 (click)="isLocked ? null : inspectionForm.patchValue({packaging_check: !inspectionForm.get('packaging_check')?.value})">
+                 #packagingCard
+                 tabindex="0"
+                 [class.active-ok]="inspectionForm.get('packaging_check')?.value"
+                 (click)="isLocked ? null : toggleCheck('packaging')"
+                 (keydown.space)="$event.preventDefault(); toggleCheck('packaging')"
+                 (keydown.arrowLeft)="focusCard('visual')"
+                 (keydown.arrowDown)="okBtn.focus()">
               
               <mat-icon>{{ inspectionForm.get('packaging_check')?.value ? 'check_circle' : 'radio_button_unchecked' }}</mat-icon>
               <strong>Balenie</strong>
-              
               <span class="status-label">
                 {{ inspectionForm.get('packaging_check')?.value ? 'Skontrolované' : 'Neskontrolované' }}
               </span>
@@ -141,18 +158,25 @@
 
           <div class="status-selector">
             <button type="button" 
+                    #okBtn
+                    tabindex="0"
                     class="status-btn ok" 
                     [class.active]="inspectionForm.get('defect_status')?.value === 'ok'"
                     [disabled]="isLocked"
-                    (click)="isLocked ? null : inspectionForm.patchValue({defect_status: 'ok'})">
+                    (click)="setStatus('ok')"
+                    (keydown.arrowRight)="errorBtn.focus()"
+                    (keydown.arrowUp)="focusCard('packaging')">
               OK
             </button>
             
             <button type="button" 
+                    #errorBtn
+                    tabindex="0"
                     class="status-btn error" 
                     [class.active]="inspectionForm.get('defect_status')?.value === 'error'"
                     [disabled]="isLocked"
-                    (click)="isLocked ? null : inspectionForm.patchValue({defect_status: 'error'})">
+                    (click)="setStatus('error')"
+                    (keydown.arrowLeft)="okBtn.focus()">
               CHYBA
             </button>
           </div>
@@ -160,19 +184,48 @@
           <small class="error-text" *ngIf="inspectionForm.get('defect_status')?.value === 'none' && inspectionForm.touched">
             Prosím, vyberte výsledný stav kontroly.
           </small>
+
           <div class="form-field">
             <label>Poznámka technika</label>
-            <textarea formControlName="defect_description" class="qc-textarea" rows="3" placeholder="Zadajte zistenia..."></textarea>
+            <textarea formControlName="defect_description" 
+            (click)="addTextStamp()"
+            class="qc-textarea" rows="3" placeholder="Zadajte podrobnosti o stave alebo chybe..."></textarea>
           </div>
 
-          <div class="shipping-box">
-            <span>Schváliť na expedíciu?</span>
-            <input type="checkbox" formControlName="approved_for_shipping">
+          <div class="shipping-container">
+            <div class="shipping-box ok-mode" *ngIf="inspectionForm.get('defect_status')?.value === 'ok'">
+              <div class="shipping-info">
+                <mat-icon>local_shipping</mat-icon>
+                <span>Schváliť výrobok na expedíciu?</span>
+              </div>
+              <input type="checkbox" formControlName="approved_for_shipping" class="qc-checkbox">
+            </div>
+          
+            <div class="shipping-box error-mode" *ngIf="inspectionForm.get('defect_status')?.value === 'error'">
+              <mat-icon>block</mat-icon>
+              <div class="error-text-container">
+                <strong>Expedícia zakázaná</strong>
+                <span>Chybný kus musí zostať na sklade na opravu/vyradenie.</span>
+              </div>
+            </div>
+          
+            <div class="shipping-box disabled-mode" *ngIf="inspectionForm.get('defect_status')?.value === 'none'">
+              <span>Pre povolenie expedície najprv určte stav výrobku.</span>
+            </div>
           </div>
 
           <div class="qc-actions" *ngIf="!isLocked">
-            <button class="btn-primary" type="submit" [disabled]="inspectionForm.invalid || isLoading">
-              {{ selectedItem?.id ? 'Uložiť zmeny' : 'Vytvoriť kontrolu' }}
+            <button type="button" class="status-btn" (click)='closeDetail()' style="flex: 0; padding: 10px 20px; margin-right: 10px;">
+              Zrušiť
+            </button>
+          
+            <button class="btn-primary" 
+                    type="submit" 
+                    [disabled]="isLoading || (inspectionForm.invalid && !selectedItem?.id)">
+              <span *ngIf="!isLoading">
+                {{ selectedItem?.id ? 'Uložiť opravu' : 'Vytvoriť kontrolu' }}
+              </span>
+              <mat-spinner *ngIf="isLoading" diameter="20"></mat-spinner>
             </button>
           </div>
         </form>
@@ -181,11 +234,11 @@
 
     <div class="qc-photos-side" *ngIf="!selectedItem?.id">
       <div class="photo-header">
-        <h3><mat-icon>collections</mat-icon> Fotodokumentácia</h3>
+        <h3><mat-icon>collections</mat-icon> Technická pomoc</h3>
       </div>
       <div class="photo-gallery">
         <div class="photo-item empty">
-          <span>Tu sa zobrazia vzorové fotografie k produktu</span>
+          <span>Tu sa zobrazia vzorové fotografie správneho balenia po identifikácii produktu.</span>
         </div>
       </div>
     </div>

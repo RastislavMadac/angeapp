@@ -14,6 +14,7 @@ export interface IProductInspection {
 
     manufacture_date: string;
     manufactured_by: number;
+    manufactured_by_name: string;
     visual_check: boolean;
     packaging_check: boolean;
     defect_status: DefectStatus;

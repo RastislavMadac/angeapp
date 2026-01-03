@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit, ElementRef, ViewChild, AfterViewInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { combineLatest, map, BehaviorSubject, Observable, Subject, Subscription, debounceTime, distinctUntilChanged, switchMap, of, catchError } from 'rxjs';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
@@ -25,6 +25,7 @@ import { TableColumn } from '../../interface/tablecolumnn.interface';
 import { IProductInspection } from '../../interface/itemCheck.interface';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
+import { ActivatedRoute, Router } from '@angular/router';
 @Component({
   selector: 'app-itemcheck',
   standalone: true,
@@ -37,13 +38,23 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
   styleUrls: ['./itemcheck.component.css']
 })
 export class ItemcheckComponent implements OnInit, OnDestroy {
+  @ViewChild('productInput') productInput!: ElementRef;
+  @ViewChild('serialInput') serialInput!: ElementRef;
+  @ViewChild('operatorSelect') operatorSelect!: ElementRef;
+  @ViewChild('visualCard') visualCard!: ElementRef;
+  @ViewChild('packagingCard') packagingCard!: ElementRef;
+  @ViewChild('okBtn') okBtn!: ElementRef;
+  @ViewChild('errorBtn') errorBtn!: ElementRef;
+  @ViewChild('dateInput') dateInput?: ElementRef;
+
+
   isLoading = true;
   errorMessage = '';
   inspectionForm: FormGroup | null = null;
   filteredData$: Observable<IProductInspection[]>;
   private filterSubject = new BehaviorSubject<IProductInspection[]>([]);
   users: any[] = [];
-
+  private subs = new Subscription();
   private searchSubject = new Subject<string>();
   private searchSubscription?: Subscription;
   foundProductName: string | null = null;
@@ -68,6 +79,9 @@ export class ItemcheckComponent implements OnInit, OnDestroy {
     console.groupEnd();
   }
 
+  returnExpeditionId: number | null = null;
+  returnItemId: number | null = null;
+
   constructor(
     private fb: FormBuilder,
     private userService: UserService,
@@ -75,7 +89,9 @@ export class ItemcheckComponent implements OnInit, OnDestroy {
     private buttonService: ButtonsService,
     private itemsCheckService: ItemsCheckService,
     private filterService: FilterService,
-    private productValidationService: ProductValidationService
+    private productValidationService: ProductValidationService,
+    private route: ActivatedRoute,
+    private router: Router
   ) {
     this.filteredData$ = combineLatest([
       this.filterSubject.asObservable(),
@@ -95,24 +111,53 @@ export class ItemcheckComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
-    this.setupSnCheck();
+    // 1. TOTO DAJ UPLNE HORE
+    console.log('🏁 [START] ItemcheckComponent sa inicializuje...');
+
+    try {
+      this.setupSnCheck();
+    } catch (e) { console.error('❌ Chyba v setupSnCheck:', e); }
+
     this.loadAllItemsChecks();
     this.loadUsers();
     this.setupProductLiveSearch();
-    this.buttonService.add$.subscribe(() => this.createNewCheck());
-  }
 
+    // 2. Častý zdroj chýb: Je buttonService injectnutý správne?
+    if (this.buttonService && this.buttonService.add$) {
+      this.buttonService.add$.subscribe(() => this.createNewCheck());
+    } else {
+      console.error('⚠️ buttonService nie je definovaný!');
+    }
+
+    // 3. Tvoje volanie
+    console.log('📞 [DEBUG] Volám checkUrlParams()...');
+    this.checkUrlParams();
+  }
+  // Pridaj túto metódu
+  focusOperator() {
+    setTimeout(() => {
+      if (this.operatorSelect && this.operatorSelect.nativeElement) {
+        this.operatorSelect.nativeElement.focus();
+        // Ak chceš, aby sa select rovno otvoril (v niektorých prehliadačoch):
+        // this.operatorSelect.nativeElement.click(); 
+      }
+    }, 100);
+  }
   private setupProductLiveSearch(): void {
     this.searchSubscription = this.searchSubject.pipe(
       debounceTime(400),
       distinctUntilChanged(),
       switchMap((code) => {
-        if (!code || code.length < 1) return of(null);
+        if (!code || code.length < 1) {
+          this.foundProductName = null;
+          return of(null);
+        }
         this.isSearching = true;
         return this.itemsCheckService.getProductByCode(code).pipe(
           catchError(() => {
             this.foundProductName = 'Produkt nenájdený';
             this.isSearching = false;
+            this.inspectionForm?.get('product_id')?.setValue(null);
             return of(null);
           })
         );
@@ -121,22 +166,47 @@ export class ItemcheckComponent implements OnInit, OnDestroy {
       this.isSearching = false;
 
       if (product && this.inspectionForm) {
-        console.log('✅ Priraďujem ID:', product.id);
+        console.log('✅ Produkt načítaný z API:', product.name);
         this.foundProductName = product.name;
 
-        // Kľúčová oprava: 
-        // 1. Nastavíme ID do poľa product_id
+        // 1. Nastavíme ID produktu do formulára
         this.inspectionForm.get('product_id')?.setValue(product.id);
-
-        // 2. Ak chceš, aby sa v políčku "Sériové číslo" (kde píšeš) objavil 
-        //    oficiálny kód z DB (ak je iný ako to, čo si písal):
-        // this.inspectionForm.get('serial_number')?.setValue(product.product_id);
-
         this.inspectionForm.markAsDirty();
         this.notify.notify(`Produkt rozpoznaný: ${product.name}`, 'success');
+
+        // 🛑 LOGIKA: Pozrieme sa, či máme odložené S/N z URL
+        if (this.pendingSnFromUrl) {
+          console.log('🔗 Mám odložené S/N, teraz ho dopĺňam:', this.pendingSnFromUrl);
+
+          // A) Vyplníme S/N do formulára
+          this.inspectionForm.patchValue({ serial_number: this.pendingSnFromUrl });
+
+          // B) Vyplníme S/N do HTML Inputu a dáme tam focus
+          if (this.serialInput) {
+            this.serialInput.nativeElement.value = this.pendingSnFromUrl;
+            this.serialInput.nativeElement.focus();
+          }
+
+          // C) Spustíme validáciu S/N (či je unikátne)
+          this.snSubject.next(this.pendingSnFromUrl);
+
+          // D) Vymažeme pamäť, aby sa to nespúšťalo znova
+          this.pendingSnFromUrl = null;
+
+        } else {
+          // Bežný stav (ak S/N nebolo v URL) -> Len presunieme kurzor na S/N
+          setTimeout(() => {
+            if (this.serialInput) {
+              this.serialInput.nativeElement.focus();
+            }
+          }, 100);
+        }
+
       }
     });
   }
+
+
   onProductCodeInput(event: any): void {
     const val = event.target.value;
     this.searchSubject.next(val);
@@ -147,6 +217,38 @@ export class ItemcheckComponent implements OnInit, OnDestroy {
     this.searchSubscription?.unsubscribe();
     this.searchSubject.complete();
   }
+
+  // 4. POMOCNÉ METÓDY PRE FOCUS A OVLÁDANIE
+  focusCard(type: 'visual' | 'packaging') {
+    if (type === 'visual') this.visualCard.nativeElement.focus();
+    else this.packagingCard.nativeElement.focus();
+  }
+  focusStatus(type: 'ok' | 'error') {
+    if (type === 'ok') this.okBtn.nativeElement.focus();
+    else this.errorBtn.nativeElement.focus();
+  }
+
+  toggleCheck(type: 'visual' | 'packaging') {
+    if (!this.inspectionForm) return;
+
+    const controlName = type === 'visual' ? 'visual_check' : 'packaging_check';
+    const control = this.inspectionForm.get(controlName);
+
+    if (control) {
+      const newVal = !control.value;
+      this.inspectionForm.patchValue({ [controlName]: newVal });
+
+      if (type === 'visual') {
+        // Ak technik práve potvrdil vizuál, skoč na balenie
+        this.focusCard('packaging');
+      } else if (type === 'packaging' && newVal === true) {
+        // Ak technik práve potvrdil balenie, skoč na výber statusu OK
+        this.focusStatus('ok');
+      }
+    }
+  }
+  // Pomocné navigácie
+  focusDate() { setTimeout(() => this.dateInput?.nativeElement?.focus(), 100); }
   loadUsers() {
     // Predpokladám, že userService má metódu na získanie zoznamu
     this.userService.loadAllUsers().subscribe({
@@ -203,94 +305,175 @@ export class ItemcheckComponent implements OnInit, OnDestroy {
     // Tu neskôr pridáš logiku pre modálne okno s hľadaním produktov
   }
 
+  // UPRAVENÝ GETTER
   get isLocked(): boolean {
-    return this.selectedItem?.id ? this.inspectionForm?.get('defect_status')?.value === 'ok' : false;
+    // Ak nie je vybraná položka, nie je čo zamykať
+    if (!this.selectedItem?.id) return false;
+
+    // Zámok aktivujeme LEN ak už v databáze (selectedItem) bolo schválené shipping.
+    // To znamená, že ak opravuješ CHYBU, selectedItem.approved_for_shipping je FALSE,
+    // takže isLocked bude FALSE a tlačidlo bude ODOMKNUTÉ.
+    return this.selectedItem.approved_for_shipping === true;
   }
-  // ---- VÝBER RIADKU (Logika z Orders) ----
+
+  // SÚBOR: itemcheck.component.ts
+
   async selectItem(item: IProductInspection) {
     console.log('%c[DEBUG] selectItem called', 'color: purple', item.id);
 
+    // 1. Ochrana pred stratou neuložených dát
     if (this.inspectionForm?.dirty) {
       const ok = await this.notify.confirm('Máte neuložené zmeny. Chcete ich uložiť?');
-      if (ok) await this.saveCheck();
+      if (ok) {
+        await this.saveCheck();
+      }
     }
 
+    // 2. Nastavenie vybranej položky
     this.selectedItem = item;
 
+    // 3. Aktualizácia UI - názov produktu v zelenej karte
+    this.foundProductName = item.product_name || null;
+    this.isSnUnique = null;
+
+    // 4. Inicializácia alebo naplnenie formulára
     if (!this.inspectionForm) {
       this.initForm(this.selectedItem);
     } else {
-      // Pred patchovaním formulár povolíme, aby sa dáta správne zapísali
-      this.inspectionForm.enable();
+      this.inspectionForm.enable(); // Povolíme pred zápisom
       this.inspectionForm.patchValue({
         ...this.selectedItem,
-        serial_number: this.selectedItem.instance_serial_number
+        serial_number: this.selectedItem.instance_serial_number,
+        product_id: this.selectedItem.product_id
       });
     }
 
-    // Ak je status 'ok', formulár deaktivujeme
+    // 5. Zamknutie formulára, ak je už expedovaný
     if (this.isLocked) {
       this.inspectionForm?.disable();
     } else {
       this.inspectionForm?.enable();
     }
 
+    // 6. Reset príznaku zmien
     this.inspectionForm?.markAsPristine();
   }
-
   async saveCheck() {
     if (!this.inspectionForm) return;
 
-    // 1. Základná validácia frontendu
-    if (this.inspectionForm.invalid) {
-      this.notify.warn('Prosím, vyplňte všetky povinné polia.');
-      return;
-    }
-
-    // 2. Kontrola, či je vybraný stav
-    const status = this.inspectionForm.get('defect_status')?.value;
-    if (status === 'none') {
-      this.notify.showWarning('Musíte vybrať výsledný stav (OK alebo CHYBA).');
-      return;
-    }
-
-    // 3. CONFIRM LOGIKA: Pýtame sa len, ak sa chystá schválenie na expedíciu (uzamknutie)
-    const isApproving = this.inspectionForm.get('approved_for_shipping')?.value === true;
-
-    if (isApproving) {
-      const confirmed = await this.notify.confirm(
-        'Pozor: Schválením na expedíciu sa tento záznam uzamkne a nebude ho možné neskôr meniť. Naozaj chcete pokračovať?'
-      );
-
-      if (!confirmed) {
-        return; // Technik klikol na "Nie", zastavíme ukladanie
-      }
-    }
-
-    // 4. Samotné odosielanie dát
     this.isLoading = true;
-    const formData = this.inspectionForm.getRawValue();
+    let request$;
 
-    const saveObservable = this.selectedItem?.id
-      ? this.itemsCheckService.updateCheck(this.selectedItem.id, formData)
-      : this.itemsCheckService.createCheck(formData);
+    if (this.selectedItem?.id) {
+      // --- UPDATE (PATCH) ---
+      // Získame len to, čo technik zmenil
+      const dirtyData = this.getDirtyValues(this.inspectionForm);
 
-    saveObservable.subscribe({
-      next: (response) => {
+      // Ak nič nezmenil, ani neposielame request
+      if (Object.keys(dirtyData).length === 0) {
+        this.notify.info('Neboli vykonané žiadne zmeny.');
         this.isLoading = false;
-        this.notify.success('Kontrola bola úspešne uložená a uzamknutá.');
-        this.loadAllItemsChecks();
-        this.selectItem(response); // Prepne na detail
+        return;
+      }
+
+      request$ = this.itemsCheckService.updateCheck(this.selectedItem.id, dirtyData);
+    } else {
+      // --- CREATE (POST) ---
+      if (this.inspectionForm.invalid) {
+        this.notify.warn('Prosím, vyplňte povinné polia.');
+        this.isLoading = false;
+        return;
+      }
+      request$ = this.itemsCheckService.createCheck(this.inspectionForm.getRawValue());
+    }
+
+    request$.subscribe({
+      next: (res) => {
+        this.isLoading = false;
         this.inspectionForm?.markAsPristine();
+        this.notify.success('Zmeny boli úspešne uložené (PATCH).');
+        this.closeDetail();
+        this.loadAllItemsChecks();
       },
       error: (err) => {
-        this.handleServerError(err); // Spracuje chyby z Django Serializeru
+        this.isLoading = false;
+        this.handleServerError(err);
       }
     });
   }
-  /**
-   * Pomocná funkcia na preklad názvov polí z backendu do ľudskej reči
-   */
+
+  addTextStamp() {
+    if (!this.inspectionForm || this.isLocked) return;
+
+    const control = this.inspectionForm.get('defect_description');
+    const currentText = control?.value || '';
+
+    // Vytvoríme časovú pečiatku: [DD.MM.YYYY HH:MM]: 
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('sk-SK');
+    const timeStr = now.getHours() + ':' + now.getMinutes().toString().padStart(2, '0');
+    const stamp = `[${dateStr} ${timeStr}]: `;
+
+    // Ak už v poli nejaký text je, pridáme pečiatku na nový riadok. 
+    // Ak je pole prázdne, dáme ju na začiatok.
+    const newText = currentText ? `${currentText}\n${stamp}` : stamp;
+
+    this.inspectionForm.patchValue({ defect_description: newText });
+  }
+
+  // SÚBOR: itemcheck.component.ts
+
+  closeDetail() {
+    console.log('🛑 [ITEMCHECK] closeDetail volané.');
+
+    // 1. SCENÁR: Návrat do expedície (ak sme sem prišli cez tlačidlo "Kontrola")
+    if (this.returnExpeditionId) {
+      console.log('🔙 Vraciam sa do expedície ID:', this.returnExpeditionId);
+
+      const navParams: any = {
+        openId: this.returnExpeditionId
+      };
+
+      // A) Pridáme ID položky na zvýraznenie (aby riadok blikol)
+      if (this.returnItemId) {
+        navParams.highlightItem = this.returnItemId;
+      }
+
+      // B) Pridáme S/N z formulára (TOTO JE KĽÚČOVÉ PRE PREDVYPLNENIE)
+      // Zistíme, čo je aktuálne napísané v poli serial_number
+      if (this.inspectionForm) {
+        const snValue = this.inspectionForm.get('serial_number')?.value;
+
+        // Posielame iba ak tam niečo je
+        if (snValue) {
+          navParams.filledSn = snValue;
+        }
+      }
+
+      console.log('🚀 Parametre navigácie:', navParams);
+
+      // C) Samotné presmerovanie
+      this.router.navigate(['/expeditions'], {
+        queryParams: navParams
+      });
+
+      // Reset pomocných premenných, aby sa to nepomiešalo pri ďalšom otvorení
+      this.returnExpeditionId = null;
+      this.returnItemId = null;
+      return; // Ukončíme funkciu, lebo odchádzame zo stránky
+    }
+
+    // 2. SCENÁR: Bežné zavretie (ak sme len prezerali zoznam kontrol cez menu)
+    console.log('❌ Žiadny návrat, ostávam na zozname kontrol a čistím formulár.');
+
+    this.selectedItem = null;
+    this.inspectionForm = null;
+    this.foundProductName = null;
+    this.isSnUnique = null;
+
+    // Voliteľné: Refresh zoznamu, ak si niečo uložil
+    this.loadAllItemsChecks();
+  }
   private translateFieldName(field: string): string {
     const translations: { [key: string]: string } = {
       'visual_check': 'Vizuálna kontrola',
@@ -305,7 +488,19 @@ export class ItemcheckComponent implements OnInit, OnDestroy {
     return translations[field] || field;
   }
 
+  // Pomocná funkcia na získanie iba zmenených hodnôt
+  getDirtyValues(form: any): any {
+    const dirtyValues: any = {};
 
+    Object.keys(form.controls).forEach(key => {
+      const currentControl = form.controls[key];
+      if (currentControl.dirty) {
+        dirtyValues[key] = currentControl.value;
+      }
+    });
+
+    return dirtyValues;
+  }
 
   /**
    * Spracovanie chýb z Django Serializeru
@@ -334,7 +529,7 @@ export class ItemcheckComponent implements OnInit, OnDestroy {
   }
   createNewCheck() {
 
-    this.selectedItem = null;
+    this.selectedItem = { id: 0 } as any;
     this.foundProductName = null;
     this.initForm({
       visual_check: false,
@@ -342,6 +537,7 @@ export class ItemcheckComponent implements OnInit, OnDestroy {
       defect_status: 'none',
       approved_for_shipping: false
     });
+    setTimeout(() => this.productInput.nativeElement.focus(), 100);
     // Pri novej kontrole musí byť formulár vždy editovateľný
     this.inspectionForm?.enable();
     this.inspectionForm?.markAsPristine();
@@ -349,9 +545,11 @@ export class ItemcheckComponent implements OnInit, OnDestroy {
 
 
   columns: TableColumn[] = [
-    { key: 'id', label: 'id cislo', type: 'text' },
+    { key: 'id', label: 'ID', type: 'text' },
     { key: 'instance_serial_number', label: 'Sériové číslo', type: 'text' },
     { key: 'product_name', label: 'Produkt', type: 'text' },
+    { key: 'manufacture_date', label: 'Dátum výroby', type: 'text' }, // Pridané: Kedy
+    { key: 'manufactured_by_name', label: 'Vyrobil', type: 'text' },   // Pridané: Kto (Meno)
     { key: 'defect_status', label: 'Stav', type: 'text' },
     { key: 'checked_by', label: 'Kontroloval', type: 'text' },
     { key: 'approved_for_shipping', label: 'Expedícia', type: 'boolean' }
@@ -366,33 +564,145 @@ export class ItemcheckComponent implements OnInit, OnDestroy {
 
 
   // --- 3. Samotná logika kontroly ---
-  private setupSnCheck(): void {
-    this.snSubject.pipe(
-      debounceTime(400),        // Počkáme, kým technik dopíše/doskenuje
-      distinctUntilChanged(),   // Iba ak sa hodnota zmenila
+  private setupSnCheck() {
+    const sub = this.snSubject.pipe(
+      debounceTime(400),
+      distinctUntilChanged(),
       switchMap(sn => {
         if (!sn || sn.length < 3) {
           this.isSnUnique = null;
           return of(null);
         }
         return this.productValidationService.checkSnUnique(sn).pipe(
-          catchError(() => {
-            this.isSnUnique = null;
-            return of(null);
-          })
+          catchError(() => of(null))
         );
       })
     ).subscribe(res => {
       if (res) {
-        // Ak exists === true, znamená to, že S/N už je v DB -> NIE JE unikátne
         this.isSnUnique = !res.exists;
+
+        // OPRAVA: Ak je S/N unikátne, skočíme na DÁTUM VÝROBY
+        if (this.isSnUnique === true) {
+          setTimeout(() => {
+            this.dateInput?.nativeElement?.focus();
+          }, 100);
+        }
       }
     });
+    this.subs.add(sub);
   }
-
   // --- 4. Metóda pre HTML input ---
   onSnInput(event: any) {
     const val = event.target.value;
     this.snSubject.next(val);
+  }
+
+  setCurrentDate() {
+    if (!this.inspectionForm || this.isLocked) return;
+
+    const dateControl = this.inspectionForm.get('manufacture_date');
+
+    // Kontrola existencie (odstráni chybu 'possibly null')
+    if (dateControl && !dateControl.value) {
+      const today = new Date().toISOString().split('T')[0];
+
+      dateControl.patchValue(today);
+      dateControl.markAsDirty(); // Teraz je to bezpečné
+      dateControl.updateValueAndValidity();
+    }
+  }
+
+  addNoteStamp() {
+    if (!this.inspectionForm || this.isLocked) return;
+
+    const control = this.inspectionForm.get('defect_description');
+
+    // Overíme, či control existuje
+    if (control) {
+      const currentVal = control.value || '';
+
+      if (!currentVal.trim()) {
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('sk-SK');
+        const timeStr = now.getHours() + ':' + now.getMinutes().toString().padStart(2, '0');
+        const stamp = `[${dateStr} ${timeStr}]: `;
+
+        control.patchValue(stamp);
+        control.markAsDirty(); // Označíme ako dirty pre PATCH request
+        control.updateValueAndValidity();
+      }
+    }
+  }
+
+  setStatus(status: 'ok' | 'error') {
+    if (this.isLocked || !this.inspectionForm) return;
+
+    const form = this.inspectionForm;
+
+    // 1. Nastavíme samotný status
+    form.get('defect_status')?.patchValue(status);
+    form.get('defect_status')?.markAsDirty();
+
+    // 2. Ak opravujeme na "OK", musíme "podpísať" aj kontroly
+    if (status === 'ok') {
+      // Vizuálna kontrola
+      form.get('visual_check')?.patchValue(true);
+      form.get('visual_check')?.markAsDirty();
+
+      // Kontrola balenia
+      form.get('packaging_check')?.patchValue(true);
+      form.get('packaging_check')?.markAsDirty();
+
+      // Ak predtým nebol vybratý dátum, skúsime ho doplniť (voliteľné)
+      if (!form.get('manufacture_date')?.value) {
+        this.setCurrentDate();
+      }
+    } else {
+      // Ak prepneme na ERROR, automaticky vypneme expedíciu
+      form.get('approved_for_shipping')?.patchValue(false);
+      form.get('approved_for_shipping')?.markAsDirty();
+    }
+
+    // Pre istotu prepočítame validitu celého formulára
+    form.updateValueAndValidity();
+  }
+  // SÚBOR: itemcheck.component.ts
+  pendingSnFromUrl: string | null = null;
+  private checkUrlParams() {
+    console.log("checkUrlParams volane");
+
+    this.route.queryParams.subscribe(params => {
+      const productVal = params['product'];
+      const snVal = params['sn'];
+
+      // Načítame ID pre návrat
+      const urlReturnId = params['returnTo'];
+      const urlReturnItem = params['returnItem'];
+
+      // Uložíme do premenných triedy (aby fungovalo tlačidlo Späť/Zavrieť)
+      if (urlReturnId) this.returnExpeditionId = Number(urlReturnId);
+      if (urlReturnItem) this.returnItemId = Number(urlReturnItem);
+
+      // Ak máme kód produktu, začíname
+      if (productVal) {
+        this.createNewCheck(); // Reset formulára
+
+        // 🛑 LOGIKA: Ak ideme z expedície (máme urlReturnId) A MÁME S/N,
+        // tak si S/N odložíme na neskôr. Ešte ho nevyplňame do formulára!
+        if (urlReturnId && snVal) {
+          console.log('Ide o kontrolu z expedície -> Odkladám si S/N na neskôr.');
+          this.pendingSnFromUrl = snVal;
+        }
+
+        // 1. Vyplníme Input PRODUKTU (aby to technik videl)
+        if (this.productInput) {
+          this.productInput.nativeElement.value = productVal;
+        }
+
+        // 2. Spustíme hľadanie produktu v API
+        // (Toto aktivuje setupProductLiveSearch)
+        this.searchSubject.next(productVal);
+      }
+    });
   }
 }

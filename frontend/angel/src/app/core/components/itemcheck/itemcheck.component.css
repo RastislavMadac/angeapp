@@ -1,9 +1,27 @@
-/* --- ZÁKLADNÝ RESET --- */
+/* =========================================
+   1. ZÁKLADNÝ RESET A GLOBÁLNE ŠTÝLY
+   ========================================= */
 * {
     box-sizing: border-box;
 }
 
-/* --- HLAVNÝ LAYOUT --- */
+/* Globálne zvýraznenie aktívneho prvku (Focus State pre skener/klávesnicu) */
+.qc-input:focus,
+.status-btn:focus,
+.check-card:focus,
+.qc-checkbox:focus,
+.btn-primary:focus,
+.btn-dots:focus,
+.qc-textarea:focus {
+    outline: none;
+    border-color: #3b82f6 !important;
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.25);
+    transition: all 0.2s ease-in-out;
+}
+
+/* =========================================
+   2. HLAVNÝ LAYOUT (Master-Detail)
+   ========================================= */
 .qc-main-layout {
     display: flex;
     height: calc(100vh - 110px);
@@ -12,7 +30,7 @@
     transition: all 0.3s ease-in-out;
 }
 
-/* REŽIM PREHĽAD (Stredový dokument) */
+/* Režim detailu (Centrovaný dokument) */
 .qc-main-layout.centered-mode {
     justify-content: center;
     background: #e5e7eb;
@@ -21,14 +39,13 @@
 .qc-main-layout.centered-mode .qc-form-side {
     flex: none;
     width: 100%;
-    max-width: 750px;
+    max-width: 850px;
     margin: 20px;
     border-radius: 12px;
     box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
     border-right: none;
 }
 
-/* STRANY (Split layout pre Create) */
 .qc-form-side {
     flex: 1.2;
     padding: 30px;
@@ -44,17 +61,9 @@
     overflow-y: auto;
 }
 
-/* --- FORMULÁROVÉ PRVKY --- */
-.qc-container {
-    width: 100%;
-}
-
-.top-actions {
-    display: flex;
-    justify-content: flex-end;
-    margin-bottom: 15px;
-}
-
+/* =========================================
+   3. HLAVIČKA A AKCIE
+   ========================================= */
 .qc-header {
     display: flex;
     justify-content: space-between;
@@ -73,9 +82,9 @@
 .qc-title span {
     color: #64748b;
     font-size: 0.9rem;
+    font-weight: 500;
 }
 
-/* Status Badges */
 .status-badge {
     padding: 6px 14px;
     border-radius: 20px;
@@ -89,14 +98,16 @@
     background: #ef4444;
 }
 
-/* Create Mode Grid */
+/* =========================================
+   4. FORMULÁROVÉ POLIA A INPUTY
+   ========================================= */
 .create-mode-box {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 15px;
     background: #f8faff;
     border: 1px dashed #cbd5e1;
-    padding: 15px;
+    padding: 20px;
     border-radius: 10px;
     margin-bottom: 25px;
 }
@@ -104,17 +115,16 @@
 .form-field {
     display: flex;
     flex-direction: column;
-    gap: 5px;
-    margin-bottom: 10px;
+    gap: 6px;
+    margin-bottom: 15px;
 }
 
 .form-field label {
-    font-size: 0.8rem;
+    font-size: 0.85rem;
     font-weight: 600;
     color: #475569;
 }
 
-/* Inputs */
 .qc-input,
 .qc-textarea {
     width: 100%;
@@ -122,23 +132,17 @@
     border: 1px solid #cbd5e1;
     border-radius: 8px;
     font-size: 0.95rem;
-    outline: none;
+    transition: border 0.2s, box-shadow 0.2s;
 }
 
-.qc-input:focus,
-.qc-textarea:focus {
-    border-color: #3f51b5;
-    box-shadow: 0 0 0 3px rgba(63, 81, 181, 0.1);
+.qc-textarea {
+    min-height: 80px;
+    resize: vertical;
 }
 
-.qc-input:disabled {
-    background: #f1f5f9;
-    color: #64748b;
-    cursor: not-allowed;
-}
-
-/* Input + Action Button */
+/* Input s tlačidlom na konci (Lupa/Zoznam) */
 .input-with-action {
+    position: relative;
     display: flex;
     width: 100%;
 }
@@ -147,7 +151,6 @@
     flex: 1;
     border-radius: 8px 0 0 8px;
     border-right: none;
-    min-width: 0;
 }
 
 .btn-dots {
@@ -156,11 +159,97 @@
     border-radius: 0 8px 8px 0;
     padding: 0 12px;
     cursor: pointer;
-    display: flex;
-    align-items: center;
+    transition: background 0.2s;
 }
 
-/* --- KARTY A STATUSY --- */
+.btn-dots:hover {
+    background: #cbd5e1;
+}
+
+/* Box pre zobrazenie výsledku hľadania produktu */
+.product-display-box {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 15px;
+    background-color: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    min-height: 42px;
+    font-weight: 600;
+    color: #64748b;
+}
+
+.product-display-box.has-product {
+    background-color: #ecfdf5;
+    border-color: #10b981;
+    color: #065f46;
+}
+
+/* Sériové číslo - stavy (S/N) */
+.sn-status-icon {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+}
+
+.sn-ok {
+    border-color: #10b981 !important;
+    background-color: #f0fdf4 !important;
+}
+
+.sn-exists {
+    border-color: #ef4444 !important;
+    background-color: #fef2f2 !important;
+    color: #b91c1c !important;
+}
+
+.error-msg-sn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: #ef4444;
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-top: 5px;
+}
+
+/* Vynútenie farieb pre ikony (vymeň v CSS súbore) */
+.text-success,
+mat-icon.text-success {
+    color: #10b981 !important;
+    /* Jasná zelená */
+}
+
+.text-error,
+mat-icon.text-error {
+    color: #ef4444 !important;
+    /* Jasná červená */
+}
+
+/* Štýl pre varovný text pod S/N */
+.error-msg-sn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #ef4444;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-top: 5px;
+}
+
+.error-msg-sn mat-icon {
+    font-size: 18px;
+    height: 18px;
+    width: 18px;
+    color: #ef4444 !important;
+}
+
+/* =========================================
+   5. KARTY KONTROLY (Vizuál / Balenie)
+   ========================================= */
 .check-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -171,7 +260,6 @@
 .check-card {
     padding: 20px;
     border: 2px solid #e2e8f0;
-    /* Jemná šedá */
     border-radius: 12px;
     display: flex;
     flex-direction: column;
@@ -180,21 +268,18 @@
     cursor: pointer;
     background: #ffffff;
     color: #64748b;
-    /* Šedý text */
-    transition: all 0.2s ease;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.check-card:hover:not(.is-locked) {
+    border-color: #cbd5e1;
+    background: #f8fafc;
 }
 
 .check-card.active-ok {
     border-color: #10b981;
-    /* Zelený okraj */
     background: #ecfdf5;
-    /* Jemne zelené pozadie */
     color: #065f46;
-}
-
-.check-card.disabled-card {
-    cursor: not-allowed;
-    opacity: 0.7;
 }
 
 .check-card mat-icon {
@@ -203,34 +288,36 @@
     height: 32px;
 }
 
-/* Ikona v neaktívnom stave */
-.check-card:not(.active-ok) mat-icon {
-    color: #cbd5e1;
-}
-
-.status-selector {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 20px;
+.check-card.active-ok mat-icon {
+    color: #10b981;
 }
 
 .status-label {
-    font-size: 0.8rem;
-    font-weight: 500;
+    font-size: 0.75rem;
+    font-weight: 600;
     text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* =========================================
+   6. STATUS SELECTOR (OK / CHYBA)
+   ========================================= */
+.status-selector {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
 }
 
 .status-btn {
     flex: 1;
-    padding: 15px;
+    padding: 16px;
     border-radius: 10px;
-    font-weight: bold;
-    font-size: 1rem;
+    font-weight: 800;
+    font-size: 1.1rem;
     cursor: pointer;
     border: 2px solid #e2e8f0;
-    /* Neutrálna šedá */
     background: #ffffff;
-    color: #64748b;
+    color: #94a3b8;
     transition: all 0.2s ease;
 }
 
@@ -238,29 +325,62 @@
     background: #10b981;
     color: white;
     border-color: #059669;
-    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
 }
 
 .status-btn.error.active {
     background: #ef4444;
     color: white;
     border-color: #b91c1c;
-    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
 }
 
-.status-btn:disabled {
-    cursor: not-allowed;
+.status-btn:active {
+    transform: scale(0.96);
 }
 
-.error-text {
-    color: #ef4444;
-    font-size: 0.75rem;
-    margin-top: -15px;
-    margin-bottom: 15px;
-    display: block;
+/* =========================================
+   7. EXPEDÍCIA A DOPLNKOVÉ INFO
+   ========================================= */
+.shipping-container {
+    margin: 20px 0;
 }
 
-/* --- INFOPANEL A EXPEDÍCIA --- */
+.shipping-box {
+    display: flex;
+    align-items: center;
+    padding: 15px 20px;
+    border-radius: 10px;
+    border: 2px solid transparent;
+}
+
+.ok-mode {
+    background-color: #f0f9ff;
+    border-color: #bae6fd;
+    justify-content: space-between;
+    color: #0369a1;
+}
+
+.error-mode {
+    background-color: #fef2f2;
+    border-color: #fecaca;
+    color: #b91c1c;
+    gap: 15px;
+}
+
+.disabled-mode {
+    background-color: #f9fafb;
+    border: 2px dashed #e5e7eb;
+    color: #9ca3af;
+    justify-content: center;
+}
+
+.qc-checkbox {
+    width: 22px;
+    height: 22px;
+    cursor: pointer;
+}
+
 .locked-info {
     display: flex;
     align-items: center;
@@ -269,44 +389,55 @@
     color: #663c00;
     padding: 12px;
     border-radius: 8px;
-    margin-bottom: 15px;
-    font-weight: 500;
+    margin-bottom: 20px;
+    font-weight: 600;
     border: 1px solid #ffe7c4;
 }
 
-.shipping-box {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: #f8fafc;
-    padding: 12px;
-    border-radius: 8px;
-    margin-bottom: 20px;
-}
-
+/* =========================================
+   8. TLAČIDLÁ A AKCIE
+   ========================================= */
 .btn-primary {
     width: 100%;
-    padding: 15px;
+    padding: 16px;
     background: #3f51b5;
     color: white;
     border: none;
     border-radius: 8px;
-    font-weight: bold;
+    font-weight: 700;
+    font-size: 1rem;
     cursor: pointer;
+    transition: background 0.2s;
 }
 
-/* --- FOTKY --- */
-.photo-item.empty {
-    height: 200px;
-    border: 2px dashed #cbd5e1;
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #94a3b8;
+.btn-primary:hover:not(:disabled) {
+    background: #303f9f;
 }
 
-/* --- RESPONZIVITA --- */
+.btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* =========================================
+   9. ANIMÁCIE A RESPONZIVITA
+   ========================================= */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.qc-container {
+    animation: fadeIn 0.3s ease-out;
+}
+
 @media (max-width: 1100px) {
     .qc-main-layout {
         flex-direction: column;
@@ -323,97 +454,22 @@
     .create-mode-box {
         grid-template-columns: 1fr;
     }
+
+    .qc-main-layout.centered-mode .qc-form-side {
+        margin: 10px;
+        width: calc(100% - 20px);
+    }
 }
 
-/* Box pre zobrazenie názvu produktu */
-.product-display-box {
+/* Spracovanie textu v notifikáciách (viacriadkové chyby) */
+.message {
+    white-space: pre-line;
+    line-height: 1.4;
+}
+
+.controls-buttons {
     display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 15px;
-    background-color: #f1f5f9;
-    /* Neutrálna sivá pre prázdny stav */
-    border: 1px solid #cbd5e1;
-    border-radius: 8px;
-    min-height: 42px;
-    font-weight: 600;
-    color: #64748b;
-    transition: all 0.3s ease;
-}
-
-/* Štýl pri úspešnom nájdení */
-.product-display-box.has-product {
-    background-color: #ecfdf5;
-    /* Jemná zelená */
-    border-color: #10b981;
-    color: #065f46;
-}
-
-.product-display-box mat-icon {
-    color: #10b981;
-    font-size: 20px;
-    width: 20px;
-    height: 20px;
-}
-
-.product-name-text {
-    flex: 1;
-}
-
-/* Kontajner pre input a ikonu */
-.input-with-action {
-    position: relative;
-    display: flex;
-    align-items: center;
-}
-
-/* Umiestnenie ikony do vnútra inputu napravo */
-.sn-status-icon {
-    position: absolute;
-    right: 12px;
-    display: flex;
-    align-items: center;
-    pointer-events: none;
-    /* Aby ikona neprekážala pri kliknutí */
-}
-
-/* Farby ikon */
-.text-success {
-    color: #10b981;
-}
-
-/* Zelená */
-.text-error {
-    color: #ef4444;
-}
-
-/* Červená */
-
-/* Špeciálne stavy okrajov inputu */
-.sn-ok {
-    border-color: #10b981 !important;
-    background-color: #f0fdf4 !important;
-}
-
-.sn-exists {
-    border-color: #ef4444 !important;
-    background-color: #fef2f2 !important;
-    color: #b91c1c !important;
-}
-
-/* Malá chybová hláška pod inputom */
-.error-msg-sn {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    color: #ef4444;
-    font-size: 0.8rem;
-    font-weight: 600;
-    margin-top: 5px;
-}
-
-.error-msg-sn mat-icon {
-    font-size: 16px;
-    width: 16px;
-    height: 16px;
+    gap: 350px;
+    justify-content: center;
+    margin-bottom: 20px;
 }

@@ -1,0 +1,181 @@
+<app-navbar></app-navbar>
+<app-small-navbar></app-small-navbar>
+
+<app-master-layout
+  [masterTemplateInput]="masterTpl"
+  [detailTemplateInput]="detailTpl"
+  [items]="items">
+</app-master-layout>
+
+<ng-template #masterTpl>
+  <app-generic-table 
+    [columns]="columns" 
+    [data]="(filteredData$ | async) ?? []"
+    (rowClick)="selectItem($event)">
+  </app-generic-table>
+</ng-template>
+
+<ng-template #detailTpl>
+    <div class="qc-main-layout" *ngIf="selectedExpedition">
+      
+      <div class="qc-form-side">
+        <div class="qc-container">
+          
+          <div class="controls-buttons">
+            <div class="top-actions">
+              <button mat-stroked-button color="primary" (click)="closeDetail()">
+                <mat-icon>arrow_back</mat-icon> Späť
+              </button>
+            </div>
+            <div class="top-actions">
+              <button mat-raised-button color="warn" (click)="closeDetail()">
+                <mat-icon>close</mat-icon> Zavrieť
+              </button>
+            </div>
+          </div>
+  
+          <header class="qc-header">
+            <div class="qc-title">
+              <span>Záznam Expedície</span>
+              <h2>#{{ selectedExpedition.expedition_number || selectedExpedition.order_number }}</h2>
+            </div>
+            <div class="status-badge" [ngClass]="selectedExpedition.status">
+              {{ selectedExpedition.status | uppercase }}
+            </div>
+          </header>
+  
+          <div class="section-title">
+            <h3>Položky v balíku ({{ selectedExpedition.items.length }})</h3>
+          </div>
+  
+          <div class="expedition-items-list">
+           
+            <div class="item-row" 
+            *ngFor="let item of selectedExpedition.items" 
+            [class.is-correct-row]="item.isCorrect"
+            [class.highlight-effect]="item.id === highlightedItemId"> <div class="item-info">
+             
+             <div class="item-title-row">
+               <strong [class.text-checked]="item.isCorrect">{{ item.product_name }}</strong>
+               
+               <div class="qty-input-wrapper" *ngIf="!item.is_serialized && selectedExpedition.status === 'draft'; else staticQty">
+                 <input type="number" 
+                        class="qty-input-field" 
+                        [value]="item.quantity" 
+                        [disabled]="item.isCorrect" 
+                        (click)="$event.stopPropagation()"
+                        (input)="item.temp_quantity = $any($event.target).value">
+                 <span class="unit">ks</span>
+               </div>
+       
+               <ng-template #staticQty>
+                 <span class="qty-badge" *ngIf="!item.product_instance_serial">
+                   {{ item.quantity }} ks
+                 </span>
+               </ng-template>
+             </div>
+       
+             <div class="item-sn-input-row" 
+                   *ngIf="!item.product_instance_serial && 
+                          selectedExpedition.status === 'draft' && 
+                          item.is_serialized">
+       
+               <div class="scanner-wrapper">
+                 
+                 <div class="inline-scanner" [class.valid-border]="item.is_sn_validated">
+                   <mat-icon>qr_code_scanner</mat-icon>
+                   
+                   <input type="text" 
+                          class="sn-input-field"
+                          placeholder="Skenujte S/N..."
+                          [(ngModel)]="item.temp_sn_value"
+                          (ngModelChange)="onSnInput(item, $event)">
+                 </div>
+       
+                 <button mat-flat-button 
+                         color="primary" 
+                         class="btn-input-action confirm-btn"
+                         *ngIf="item.is_sn_validated"
+                         (click)="confirmSn(item)">
+                   <mat-icon>check</mat-icon>
+                   POTVRDIŤ
+                 </button>
+       
+                 <button mat-stroked-button 
+                         class="btn-input-action check-btn"
+                         *ngIf="!item.is_sn_validated"
+                         (click)="goToInspection(item, item.temp_sn_value || '')">
+                   <mat-icon>fact_check</mat-icon> Kontrola
+                 </button>
+       
+               </div>
+       
+               <div class="input-hint" *ngIf="item.is_sn_validated">
+                 <small class="text-success">S/N je platné. Potvrďte uloženie.</small>
+               </div>
+       
+             </div>
+             <div class="item-sn-display" *ngIf="item.product_instance_serial">
+               <mat-icon class="sn-icon">qr_code_2</mat-icon>
+               <span class="sn-value" [class.sn-checked]="item.isCorrect">
+                 {{ item.product_instance_serial }}
+               </span>
+             </div>
+       
+           </div>
+           
+           <div class="item-actions-group">
+             
+             <div class="check-action-zone">
+               <mat-checkbox 
+                 class="custom-mat-checkbox"
+                 [checked]="item.isCorrect"
+                 (change)="onSmartCheckboxChange(item, $event)">
+               </mat-checkbox>
+             </div>
+       
+             <div class="item-delete-zone">
+               <button mat-icon-button color="warn" 
+                       (click)="deleteItem(selectedExpedition.id, item.id)"
+                       *ngIf="selectedExpedition.status === 'draft' && !item.isCorrect">
+                 <mat-icon>delete_outline</mat-icon>
+               </button>
+             </div>
+           </div>
+       
+       </div>
+
+          </div>
+  
+        </div>
+      </div>
+  
+      <div class="qc-photos-side">
+         <div class="photo-header">
+          <h3><mat-icon>fact_check</mat-icon> Kontrola objednávky</h3>
+        </div>
+        
+        <div class="prepared-list">
+          <div class="prepared-item" *ngFor="let p of selectedExpedition.prepared_items" [class.done]="p.product_instance">
+            <mat-icon [style.color]="p.product_instance ? '#22c55e' : '#cbd5e0'">
+              {{ p.product_instance ? 'check_circle' : 'radio_button_unchecked' }}
+            </mat-icon>
+            <div class="prepared-info">
+              <span class="p-name">{{ p.product_name }}</span>
+              <small class="p-qty" *ngIf="p.quantity">Potrebné: {{ p.quantity }}ks</small>
+            </div>
+          </div>
+        </div>
+  
+        <div class="qc-actions">
+          <button class="btn-primary" 
+                  (click)="finishExpedition()"
+                  [disabled]="selectedExpedition.status !== 'draft' || isLoading || !allChecked">
+            <mat-icon>local_shipping</mat-icon> 
+            {{ !allChecked ? 'DOKONČITE KONTROLU' : 'POTVRDIŤ A ODOSLAŤ' }}
+          </button>
+        </div>
+      </div>
+  
+    </div>
+  </ng-template>

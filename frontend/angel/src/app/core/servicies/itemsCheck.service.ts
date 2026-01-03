@@ -24,8 +24,8 @@ export class ItemsCheckService {
     }
 
     // Pridaná metóda pre aktualizáciu
-    updateCheck(id: number, data: Partial<IProductInspection>): Observable<IProductInspection> {
-        return this.http.patch<IProductInspection>(`${this.apiUrl}quality-checks/${id}/`, data);
+    updateCheck(id: number, data: any): Observable<any> {
+        return this.http.patch(`${this.apiUrl}quality-checks/${id}/`, data);
     }
 
     // ...
@@ -41,5 +41,9 @@ export class ItemsCheckService {
     getProductByCode(code: string): Observable<any> {
         return this.http.get<any>(`${this.apiUrl}products/by-code/?code=${code}`);
 
+    }
+    // Pridaná metóda pre aktualizáciu
+    getExpedition(id: number): Observable<any> {
+        return this.http.get(`${this.apiUrl}expedition-items/${id}/`);
     }
 }

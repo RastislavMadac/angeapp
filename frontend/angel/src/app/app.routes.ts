@@ -93,6 +93,13 @@ export const routes: Routes = [
                     import('./core/components/itemcheck/itemcheck.component')
                         .then(m => m.ItemcheckComponent),
             },
+            {
+                path: 'expeditions',
+                canActivate: [roleGuard],
+                loadComponent: () =>
+                    import('./core/components/expeditions/expeditions.component')
+                        .then(m => m.ExpeditionsComponent),
+            },
             { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
         ],
     },
