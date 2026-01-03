@@ -2,6 +2,7 @@ from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
 from angelapp.services.stock_issue_service import StockIssueService
+from angelapp.services.expedition_service import ExpeditionService
 from .models import Expedition, ExpeditionItem, ItemQualityCheck, User,Product, ProductType, Category, Unit,ProductInstance,ProductIngredient, Company,Order,OrderItem,StockReceipt,ProductionPlanItem,ProductionPlan,ProductionCard,StockIssue, StockIssueItem
 from rest_framework.authtoken.models import Token
 import re
@@ -1082,9 +1083,13 @@ class ItemQualityCheckSerializer(serializers.ModelSerializer):
     # ---------- VSTUPY Z FRONTENDU ----------
     product_id = serializers.PrimaryKeyRelatedField(
         queryset=Product.objects.all(),
-        write_only=True
+        write_only=True,
+        required=False  # Kľúčová zmena
     )
-    serial_number = serializers.CharField(write_only=True)
+    serial_number = serializers.CharField(
+        write_only=True, 
+        required=False  # Kľúčová zmena
+    )
 
     manufacture_date = serializers.DateField()
     visual_check = serializers.BooleanField()
@@ -1115,12 +1120,20 @@ class ItemQualityCheckSerializer(serializers.ModelSerializer):
         read_only=True
     )
 
+   # Pole pre ID (vstup z dropdownu)
     manufactured_by = serializers.PrimaryKeyRelatedField(
-        queryset=User.objects.all(),  # všetci existujúci používatelia
-        required=True
+        queryset=User.objects.all()
+    )
+
+    # ---------- VÝSTUPY PRE TABUĽKU (Read-Only) ----------
+    # Toto pole zabezpečí zobrazenie mena v stĺpci 'manufactured_by_name'
+    manufactured_by_name = serializers.CharField(
+        source="manufactured_by.get_full_name", 
+        read_only=True
     )
     checked_by = serializers.StringRelatedField(read_only=True)
 
+    checked_by = serializers.StringRelatedField(read_only=True)
     checked_at = serializers.DateField(read_only=True)
     created_at = serializers.DateTimeField(read_only=True)
     updated_at = serializers.DateTimeField(read_only=True)
@@ -1140,6 +1153,7 @@ class ItemQualityCheckSerializer(serializers.ModelSerializer):
             # výroba
             "manufacture_date",
             "manufactured_by",
+            "manufactured_by_name",  # Pridané sem
 
             # kontrola
             "visual_check",
@@ -1162,6 +1176,7 @@ class ItemQualityCheckSerializer(serializers.ModelSerializer):
             "instance_serial_number",
             "product_name",
             "manufactured_by",
+            "manufactured_by_name",
             "checked_by",
             "checked_at",
             "created_at",
@@ -1169,57 +1184,67 @@ class ItemQualityCheckSerializer(serializers.ModelSerializer):
         ]
 
     def validate(self, data):
-            # 1️⃣ Načítanie hodnôt (berie dáta z POST requestu, alebo z existujúcej inštancie pri UPDATE)
-            visual_check = data.get("visual_check", getattr(self.instance, "visual_check", False))
-            packaging_check = data.get("packaging_check", getattr(self.instance, "packaging_check", False))
-            defect_status = data.get("defect_status", getattr(self.instance, "defect_status", "ok"))
-            approved_for_shipping = data.get("approved_for_shipping", getattr(self.instance, "approved_for_shipping", False))
-            
-            manufacture_date = data.get("manufacture_date", getattr(self.instance, "manufacture_date", None))
-            manufactured_by = data.get("manufactured_by", getattr(self.instance, "manufactured_by", None))
+        # 1️⃣ Načítanie hodnôt (priorita má prichádzajúci request, inak berieme z DB)
+        instance = self.instance
+        # Ak vytvárame nový (POST), product_id a serial_number sú povinné
+        if not instance:
+            if 'product_id' not in data:
+                raise serializers.ValidationError({"product_id": "Toto pole je povinné pri vytváraní."})
+            if 'serial_number' not in data:
+                raise serializers.ValidationError({"serial_number": "Toto pole je povinné pri vytváraní."})
+        visual_check = data.get("visual_check", getattr(instance, "visual_check", False))
+        packaging_check = data.get("packaging_check", getattr(instance, "packaging_check", False))
+        defect_status = data.get("defect_status", getattr(instance, "defect_status", "none"))
+        approved_for_shipping = data.get("approved_for_shipping", getattr(instance, "approved_for_shipping", False))
+        
+        manufacture_date = data.get("manufacture_date", getattr(instance, "manufacture_date", None))
+        manufactured_by = data.get("manufactured_by", getattr(instance, "manufactured_by", None))
 
-            # 2️⃣ ZAMKNUTÁ KONTROLA (už schválené sa nemení)
-            if self.instance and self.instance.approved_for_shipping:
-                raise serializers.ValidationError("Táto kontrola je zamknutá, pretože už bola schválená na expedíciu.")
+        if defect_status == "ok" and not manufactured_by:
+             errors["manufactured_by"] = "Pracovník výroby musí byť priradený."
 
-            # 3️⃣ STRIKTNÁ KONTROLA PRE KAŽDÝ "SAVE" (POST aj PUT)
-            # Ak chceš, aby neprešiel žiaden záznam bez splnenia týchto podmienok:
-            errors = {}
+        # 2️⃣ ZAMKNUTÁ KONTROLA (Iba ak už v DB existuje príznak schválenia)
+        # Toto bráni prepísaniu už odoslaného/schváleného tovaru.
+        if instance and instance.approved_for_shipping:
+            raise serializers.ValidationError(
+                "Tento záznam je už finálne schválený na expedíciu a nie je možné ho meniť."
+            )
 
-            if visual_check is not True:
-                errors["visual_check"] = "Vizuálna kontrola musí byť označená ako úspešná (true)."
-            
-            if packaging_check is not True:
-                errors["packaging_check"] = "Kontrola balenia musí byť označená ako úspešná (true)."
-            
+        errors = {}
+
+        # 3️⃣ LOGIKA OPRAVY A SCHVAĽOVANIA
+        # Ak používateľ nastavuje 'ok', musíme skontrolovať, či sú splnené fyzické kontroly
+        if defect_status == "ok":
+            if not visual_check:
+                errors["visual_check"] = "Pre stav 'Bez chyby' musí byť vizuálna kontrola úspešná."
+            if not packaging_check:
+                errors["packaging_check"] = "Pre stav 'Bez chyby' musí byť kontrola balenia úspešná."
+        
+        # Ak používateľ nastavuje 'approved_for_shipping' na True
+        if approved_for_shipping is True:
             if defect_status != "ok":
-                errors["defect_status"] = "Status chybovosti musí byť 'Bez chyby' (ok)."
-            
-            if approved_for_shipping is not True:
-                errors["approved_for_shipping"] = "Výrobok musí byť povolený k expedícii (true)."
+                errors["approved_for_shipping"] = "Výrobok môžete schváliť na expedíciu len ak je stav 'Bez chyby' (ok)."
+            if not visual_check or not packaging_check:
+                errors["approved_for_shipping"] = "Výrobok musí mať splnené všetky kontroly pred schválením na expedíciu."
 
+        # Povinné polia pri stave OK
+        if defect_status == "ok":
             if not manufacture_date:
-                errors["manufacture_date"] = "Dátum výroby musí byť zadaný."
-            
+                errors["manufacture_date"] = "Dátum výroby je povinný pre bezchybný kus."
             if not manufactured_by:
-                errors["manufactured_by"] = "Meno pracovníka výroby musí byť priradené."
+                errors["manufactured_by"] = "Pracovník výroby musí byť priradený."
 
-            # Ak sa našla akákoľvek chyba, vrátime ich všetky naraz
-            if errors:
-                raise serializers.ValidationError(errors)
+        if errors:
+            raise serializers.ValidationError(errors)
 
-            # 4️⃣ KONTROLA MANUFACTURED STATUSU (Pôvodná logika z predošlého kódu)
+        # 4️⃣ KONTROLA STATUSU PRODUKTU (Iba pri novom zázname - POST)
+        if not instance:
             product = data.get("product_id")
-            if not self.instance: # Len pri POST
-                if not product:
-                    errors["product_id"] = "Produkt je povinný."
-                elif hasattr(product, "code") and product.code.strip().upper() != "MANUFACTURED":
-                    errors["product_id"] = "Tento produkt nie je v stave MANUFACTURED."
-                
-                if errors: # Ak sme pridali chybu ohľadom produktu
-                    raise serializers.ValidationError(errors)
+            if product and hasattr(product, "code") and product.code.strip().upper() != "MANUFACTURED":
+                raise serializers.ValidationError({"product_id": "Tento produkt nie je v stave MANUFACTURED."})
 
-            return data
+        return data
+   
     def validate_serial_number(self, value):
         value = value.strip()
 
@@ -1254,7 +1279,24 @@ class ItemQualityCheckSerializer(serializers.ModelSerializer):
 
         return quality_check
 
-
+    def update(self, instance, validated_data):
+        """
+        Aktualizácia kontroly kvality s následnou aktualizáciou 
+        statusu a času zmeny v ProductInstance.
+        """
+        # 1. Štandardná aktualizácia záznamu ItemQualityCheck
+        instance = super().update(instance, validated_data)
+        
+        # 2. Kontrola podmienok pre "opravu" a schválenie
+        if instance.defect_status == "ok" and instance.approved_for_shipping:
+            product_instance = instance.product_instance
+            
+            # Zmena statusu na 'inspected' (pripravený na sklad/expedíciu)
+            product_instance.status = "inspected"
+            
+           
+            
+        return instance
 # -----------------------
 # ProductErrorReportSerializer Report chybovosti
 # -----------------------
@@ -1271,12 +1313,21 @@ class ProductErrorReportSerializer(serializers.Serializer):
 
 
 class ExpeditionItemSerializer(serializers.ModelSerializer):
+    is_serialized=serializers.BooleanField(
+        source='order_item.product.is_serialized',
+        read_only=True
+    )
     product_instance_serial = serializers.CharField(
         source='product_instance.serial_number',
         read_only=True
     )
     product_name = serializers.CharField(
         source='order_item.product.product_name',
+        read_only=True
+    )
+
+    product_code = serializers.CharField(
+        source='order_item.product.product_id',
         read_only=True
     )
 
@@ -1297,12 +1348,14 @@ class ExpeditionItemSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "order_item",
+            "product_code",
             "product_instance",
             "product_instance_serial",
             "product_name",
             "unit_price",
             "stock_issue_item",
             "quantity",
+            "is_serialized"
         ]
 
 
@@ -1376,10 +1429,13 @@ class ExpeditionSerializer(serializers.ModelSerializer):
         source='order.order_number', read_only=True
     )
 
+   
+
     class Meta:
         model = Expedition
         fields = [
             "id",
+            "expedition_number",
             "order",
             "order_number",
             "status",
@@ -1387,9 +1443,10 @@ class ExpeditionSerializer(serializers.ModelSerializer):
             "items",
             "prepared_items",
             "stock_issue",
-            "stock_warnings"
+            "stock_warnings",
+          
         ]
-        read_only_fields = ["stock_issue", "closed_at"]
+        read_only_fields = ["expedition_number","stock_issue", "closed_at"]
 
     # -----------------------
     # Read-only prepared_items
@@ -1468,6 +1525,8 @@ class ExpeditionSerializer(serializers.ModelSerializer):
     # Create
     # -----------------------
     def create(self, validated_data):
+        
+        validated_data['expedition_number'] = ExpeditionService.generate_expedition_number()
         expedition = Expedition.objects.create(**validated_data)
         self.create_items_for_expedition(expedition)
 

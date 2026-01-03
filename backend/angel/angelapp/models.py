@@ -802,6 +802,14 @@ class Expedition(models.Model):
         (STATUS_SHIPPED, "Odoslaná"),
     ]
 
+    expedition_number = models.CharField(
+        max_length=20, 
+        unique=True, 
+        editable=False,
+        null=True, 
+        blank=True
+    )
+
     order = models.ForeignKey(
         'Order',
         on_delete=models.PROTECT,

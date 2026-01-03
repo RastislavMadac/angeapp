@@ -30,8 +30,6 @@ router.register(r'expedition-items', ExpeditionItemViewSet, basename='expedition
 
 
 
-
-
 urlpatterns = [
     path('', include(router.urls)),
     path('login/', CustomAuthToken.as_view(), name='api-login'),
