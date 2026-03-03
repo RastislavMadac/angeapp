@@ -19,6 +19,10 @@ import { NotificationService } from '../../servicies/notification.service';
 import { ButtonsService } from '../../servicies/buttons.service';
 import { combineLatest, map, BehaviorSubject, Observable } from 'rxjs';
 import { FilterService } from '../../servicies/filter.service';
+
+import { Router } from '@angular/router';
+import { ExpeditionService } from '../../servicies/expedition.service';
+import { IExpedition } from '../../interface/expedition.interface'
 @Component({
   selector: 'app-orders',
   templateUrl: './orders.component.html',
@@ -95,7 +99,11 @@ export class OrdersComponent implements OnInit {
   productMenu = [
     { label: 'Hlavny Zoznam', styleClass: 'btn-new navigation', click: () => this.closeModal() },
     { label: 'Zoznam položiek', styleClass: 'btn-popular navigation', click: () => this.openModal() },
-
+    {
+      label: 'Expedícia',
+      styleClass: 'btn-confirm navigation', // CSS triedu si prispôsob
+      click: () => this.createExpeditionFromOrder()
+    },
   ];
 
   columns: TableColumn[] = [
@@ -117,6 +125,8 @@ export class OrdersComponent implements OnInit {
     private notify: NotificationService,
     private buttonService: ButtonsService,
     private filterService: FilterService,
+    private expeditionService: ExpeditionService,
+    private router: Router
   ) {
     this.filteredData$ = combineLatest([
       this.filterSubject.asObservable(),
@@ -360,6 +370,50 @@ export class OrdersComponent implements OnInit {
   closeOrderModal() {
     this.showModal = false;
     this.selectedOrderItems = [];
+  }
+
+  createExpeditionFromOrder() {
+    if (!this.selectedOrder) {
+      this.notify.notify('Musíte najprv vybrať objednávku!', 'error');
+      return;
+    }
+
+    this.notify.confirm(`Chcete vytvoriť expedíciu pre objednávku ${this.selectedOrder.order_number}?`)
+      .then((confirmed) => {
+        if (confirmed) {
+          this.isLoading = true;
+
+          // Pripravíme payload - backend očakáva ID objednávky
+          const payload: any = {
+            order: this.selectedOrder!.id,
+            status: 'draft'
+            // Backend by mal automaticky dotiahnuť items z objednávky
+          };
+
+          this.expeditionService.createExpedition(payload).subscribe({
+            next: (newExpedition: IExpedition) => {
+              this.notify.notify('Expedícia vytvorená', 'success');
+              this.isLoading = false;
+
+              // Presmerovanie na ExpeditionsComponent a otvorenie novej expedície
+              // Používame queryParams 'openId', ktoré sme naprogramovali v minulom kroku
+              this.router.navigate(['/expeditions'], {
+                queryParams: { openId: newExpedition.id }
+              });
+            },
+            error: (err) => {
+              console.error(err);
+              // Ošetríme chybu, ak už expedícia existuje (záleží od backendu)
+              if (err.status === 400 && err.error?.order) {
+                this.notify.notify('Pre túto objednávku už expedícia existuje!', 'error');
+              } else {
+                this.notify.notify('Nepodarilo sa vytvoriť expedíciu', 'error');
+              }
+              this.isLoading = false;
+            }
+          });
+        }
+      });
   }
 
 }

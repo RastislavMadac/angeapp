@@ -1,4 +1,3 @@
-<!-- Navbar -->
 <app-navbar
   [selectedItem]="selectedOrder"
   (deleteItem)="onDeleteOrder($event)"
@@ -6,66 +5,25 @@
   (edit)="selectOrder($event)">
 </app-navbar>
 
-<!-- Small navigation menu -->
-<app-small-navbar
- [menuItems]="productMenu"
- ></app-small-navbar>
+<app-small-navbar [menuItems]="productMenu"></app-small-navbar>
 
-<!-- Detail template -->
-<ng-template #detailTpl>
-  <form *ngIf="orderForm" [formGroup]="orderForm" (ngSubmit)="saveOrder()">
-    <label>Číslo objednávky: 
-      <input formControlName="order_number">
-    </label><br>
-
-    <label>Zákazník: 
-      <input formControlName="customer">
-    </label><br>
-
-    <label>Celková cena: 
-      <input formControlName="total_price">
-    </label><br>
-
-    <label>Status:
-      <select formControlName="status">
-        <option value="pending">Prijatá</option>
-        <option value="processing">Spracovaná</option>
-        <option value="completed">Odoslaná</option>
-        <option value="canceled">Zrušená</option>
-      </select>
-    </label><br>
-
-    <button type="submit" [disabled]="orderForm.invalid">
-      {{ selectedOrder ? 'Uložiť' : 'Vytvoriť' }}
-    </button>
-  </form>
-</ng-template>
-
-<!-- Master layout -->
 <app-master-layout
   [masterTemplateInput]="masterTpl"
   [detailTemplateInput]="detailTpl"
   [items]="orders"
- 
   [(selectedItem)]="selectedOrder"
   (selectedItemChange)="onSelectedItemChange($event)"   
   (select)="selectOrder($event)">
 </app-master-layout>
 
-
-
-<!-- Order items modal -->
 <app-order-items
   *ngIf="showModal"
-  
   [order]="selectedOrder"
   [items]="selectedOrderItems"
   (close)="closeModal()"
   (updated)="onOrderUpdated($event)">
 </app-order-items>
 
-
-<!-- Master table template -->
 <ng-template #masterTpl> 
   <app-generic-table 
     [columns]="columns" 
@@ -74,4 +32,74 @@
     [selectedItem]="selectedOrder" 
     [rowClassMap]="getRowClass">
   </app-generic-table> 
+</ng-template>
+
+<ng-template #detailTpl>
+  <div class="detail-container">
+    
+    <div class="detail-header">
+      <h2>{{ selectedOrder ? 'Detail Objednávky' : 'Nová Objednávka' }}</h2>
+      <span class="id-badge" *ngIf="selectedOrder">ID: {{ selectedOrder.id }}</span>
+    </div>
+
+    <form *ngIf="orderForm" [formGroup]="orderForm" (ngSubmit)="saveOrder()" class="modern-form">
+      
+      <div class="form-grid">
+        
+        <div class="form-group">
+          <label for="orderNum">Číslo objednávky</label>
+          <div class="input-wrapper">
+             <input id="orderNum" type="text" formControlName="order_number" placeholder="Napr. OBJ-2024-001">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="customer">Zákazník</label>
+          <div class="input-wrapper">
+            <input id="customer" type="text" formControlName="customer" placeholder="Meno zákazníka">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="price">Celková cena (€)</label>
+          <div class="input-wrapper">
+            <input id="price" type="number" formControlName="total_price" placeholder="0.00">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="status">Status</label>
+          <div class="input-wrapper select-wrapper">
+            <select id="status" formControlName="status">
+              <option value="pending">🟡 Prijatá</option>
+              <option value="processing">🔵 Spracovaná</option>
+              <option value="completed">🟢 Odoslaná</option>
+              <option value="canceled">🔴 Zrušená</option>
+            </select>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="form-actions">
+        
+        <button mat-raised-button color="primary" type="submit" [disabled]="orderForm.invalid" class="btn-lg">
+          <mat-icon>save</mat-icon>
+          {{ selectedOrder ? 'Uložiť zmeny' : 'Vytvoriť' }}
+        </button>
+
+        <button mat-raised-button 
+                color="accent" 
+                type="button" 
+                class="btn-lg"
+                *ngIf="selectedOrder && selectedOrder.id"
+                (click)="createExpeditionFromOrder()">
+          <mat-icon>local_shipping</mat-icon>
+          Vytvoriť Expedíciu
+        </button>
+
+      </div>
+
+    </form>
+  </div>
 </ng-template>

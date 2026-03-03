@@ -552,4 +552,41 @@ export class ExpeditionsComponent implements OnInit, OnDestroy {
       }
     });
   }
+
+  createExpedition(): void {
+    // 1. Overenie (voliteľné, ale odporúčané)
+    this.notify.confirm('Chcete vytvoriť novú manuálnu expedíciu?').then((isConfirmed) => {
+
+      if (isConfirmed) {
+        this.isLoading = true;
+
+        // 2. Dáta pre novú expedíciu (záleží od tvojho backendu, čo vyžaduje)
+        // Posielame aspoň status, prípadne prázdny objekt {}
+        const payload: Partial<IExpedition> = {
+          status: 'draft'
+          // Tu by sa dalo pridať napr. created_at, poznámka atď.
+        };
+
+        // 3. Volanie backendu
+        this.expeditionService.createExpedition(payload as any).subscribe({
+          next: (newExpedition) => {
+            this.notify.showSuccess('Nová expedícia úspešne vytvorená.');
+
+            // 4. Refresh zoznamu
+            this.loadAllexpeditions();
+
+            // 5. Voliteľné: Rovno otvoriť detail novej expedície
+            // this.selectItem(newExpedition); 
+
+            this.isLoading = false;
+          },
+          error: (err) => {
+            console.error(err);
+            this.notify.showError('Nepodarilo sa vytvoriť expedíciu.');
+            this.isLoading = false;
+          }
+        });
+      }
+    });
+  }
 }

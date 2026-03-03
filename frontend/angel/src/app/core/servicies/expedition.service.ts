@@ -21,7 +21,10 @@ export class ExpeditionService {
     loadAllExpeditions(): Observable<IExpedition[]> {
         return this.http.get<IExpedition[]>(`${this.apiUrl}expeditions/`);
     }
-
+    createExpedition(data: Partial<IExpedition>): Observable<IExpedition> {
+        // Posielame POST na vytvorenie nového záznamu
+        return this.http.post<IExpedition>(`${this.apiUrl}expeditions/`, data);
+    }
 
     getExpedition(id: number): Observable<IExpedition> {
         // Django REST framework vyžaduje lomku na konci (trailing slash)
